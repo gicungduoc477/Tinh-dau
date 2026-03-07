@@ -12,5 +12,7 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 # Bật chế độ rewrite của Apache để chạy được các route Laravel
 RUN a2enmod rewrite
 
-# Sửa cấu hình Apache để trỏ trực tiếp vào thư mục /public
 RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
+
+# Lệnh tự động chạy migrate mỗi khi khởi động web
+CMD php artisan migrate --force && apache2-foreground
