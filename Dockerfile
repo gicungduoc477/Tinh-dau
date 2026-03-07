@@ -23,9 +23,9 @@ RUN a2enmod rewrite
 # 5. Cấu hình Apache trỏ thẳng vào thư mục public của Laravel
 RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 
-# 6. Lệnh khởi động: Dọn cache -> Migrate tạo bảng -> Seed nạp dữ liệu -> Chạy Apache
-CMD php artisan config:clear && \
-    php artisan cache:clear && \
-    php artisan migrate --force && \
+# 6. Lệnh khởi động CHUẨN: Tạo bảng trước -> Seed dữ liệu -> Sau đó mới dọn cache
+CMD php artisan migrate --force && \
     php artisan db:seed --force && \
+    php artisan config:clear && \
+    php artisan cache:clear && \
     apache2-foreground
