@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-// Quan trọng: Thêm 2 dòng này để Laravel tìm thấy Model
+// Đảm bảo 2 dòng này có mặt để Laravel tìm thấy class
 use App\Models\Product;
 use App\Models\Category;
 
@@ -15,12 +15,13 @@ class ProductSeeder extends Seeder
      */
     public function run(): void
     {
-        // Tạo hoặc lấy Category đầu tiên
+        // 1. Tạo hoặc lấy Category (Dùng class Category đã import)
         $category = Category::firstOrCreate(
             ['name' => 'Tinh dầu thiên nhiên'], 
             ['slug' => 'tinh-dau-thien-nhien']
         );
 
+        // 2. Danh sách sản phẩm
         $products = [
             ['Sả Chanh', 'tinh-dau-sa-chanh', 150000],
             ['Bạc Hà', 'tinh-dau-bac-ha', 120000],
@@ -44,12 +45,13 @@ class ProductSeeder extends Seeder
             ['Sả Hoa Hồng', 'tinh-dau-sa-hoa-hong', 165000],
         ];
 
+        // 3. Vòng lặp tạo sản phẩm
         foreach ($products as $p) {
             $baseSlug = $p[1];
             $slug = $baseSlug;
             $i = 1;
             
-            // Kiểm tra slug trùng lặp
+            // Kiểm tra trùng slug (Dùng class Product đã import)
             while (Product::where('slug', $slug)->exists()) {
                 $slug = $baseSlug . '-' . $i++;
             }
