@@ -4,8 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
-// Thêm dòng này để nạp class Config nếu cần, nhưng dùng helper config() cho nhanh
-use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,12 +21,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // 1. Cấu hình phân trang Bootstrap 5 (Giữ nguyên của bạn)
+        // 1. Cấu hình phân trang Bootstrap 5
         Paginator::useBootstrapFive();
 
-        // 2. ÉP NẠP CẤU HÌNH CLOUDINARY NGAY KHI APP KHỞI ĐỘNG
-        // Cách này giúp sửa lỗi "Trying to access array offset on null" 
-        // bằng cách đảm bảo cấu hình không bao giờ bị null khi thư viện gọi tới.
+        // 2. ÉP DÙNG HTTPS KHI CHẠY TRÊN RENDER
+        // Giúp sửa lỗi "The information you’re about to submit is not secure" khi đăng nhập
+        if (config('app.env') !== 'local') {
+            URL::forceScheme('https');
+        }
+
+        // 3. ÉP NẠP CẤU HÌNH CLOUDINARY
+        // Giúp sửa lỗi "Trying to access array offset on null" khi upload ảnh
         config([
             'cloudinary.cloud_url' => env('CLOUDINARY_URL')
         ]);
