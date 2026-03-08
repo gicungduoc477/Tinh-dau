@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use App\Models\Cart; 
-use Illuminate\Support\Facades\Log;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -46,21 +45,13 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
-        // 4. Lấy giỏ hàng từ session TRƯỚC khi regenerate (vì regenerate có thể làm mất session cũ)
-        $sessionCart = session('cart', []);
-
-        // 5. Đăng nhập thành công, làm mới session để tránh tấn công Session Fixation
+        // 4. Đăng nhập thành công, làm mới session
         $request->session()->regenerate();
 
-        // 6. --- LOGIC GỘP GIỎ HÀNG ---
-        // Sử dụng try-catch để nếu giỏ hàng lỗi thì vẫn cho người dùng vào trang web
-        try {
-            $this->mergeCartAfterLogin($sessionCart);
-        } catch (\Exception $e) {
-            Log::error("Lỗi gộp giỏ hàng: " . $e->getMessage());
-        }
+        // 5. --- LOGIC GỘP GIỎ HÀNG TỪ SESSION VÀO DATABASE ---
+        $this->mergeCartAfterLogin();
 
-        // 7. Xử lý chuyển hướng dựa trên vai trò (Role)
+        // 6. Xử lý chuyển hướng dựa trên vai trò (Role)
         $user = Auth::user();
 
         if ($user->role === 'admin') {
@@ -74,12 +65,13 @@ class AuthenticatedSessionController extends Controller
 
     /**
      * Hàm phụ trợ: Gộp giỏ hàng session vào DB
+     * Đã cập nhật để fix lỗi Data truncated column 'product_id'
      */
-    protected function mergeCartAfterLogin($sessionCart)
+    protected function mergeCartAfterLogin()
     {
+        $sessionCart = session('cart', []);
+        
         if (!empty($sessionCart)) {
-            $userId = Auth::id();
-
             foreach ($sessionCart as $key => $details) {
                 // XỬ LÝ FIX LỖI: Nếu key là "23_subscription", lấy ra con số 23
                 $cleanProductId = $key;
@@ -87,24 +79,24 @@ class AuthenticatedSessionController extends Controller
                     $cleanProductId = explode('_', $key)[0];
                 }
 
+                // Chuyển ID về kiểu int để đảm bảo an toàn DB
                 $cleanProductId = (int)$cleanProductId;
 
-                // Nếu product_id không hợp lệ (bằng 0), bỏ qua để tránh lỗi DB
-                if ($cleanProductId <= 0) continue;
-
-                // Kiểm tra xem trong DB đã có sản phẩm đó chưa
-                $cartItem = Cart::where('user_id', $userId)
+                // Kiểm tra xem trong DB của user này đã có sản phẩm đó chưa
+                $cartItem = Cart::where('user_id', Auth::id())
                                 ->where('product_id', $cleanProductId)
                                 ->first();
 
                 if ($cartItem) {
+                    // Nếu đã có, cộng dồn số lượng
                     $cartItem->increment('quantity', $details['quantity']);
                 } else {
+                    // Nếu chưa có, tạo mới bản ghi trong DB
                     Cart::create([
-                        'user_id'    => $userId,
+                        'user_id'    => Auth::id(),
                         'product_id' => $cleanProductId,
                         'quantity'   => $details['quantity'],
-                        'price'      => $details['price'] ?? 0
+                        'price'      => $details['price']
                     ]);
                 }
             }
