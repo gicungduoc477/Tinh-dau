@@ -4,7 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Order;
-use Illuminate\Support\Facades\Artisan; // Thêm Facade Artisan
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB; // Thêm DB Facade
 
 // Admin Controllers
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -33,7 +34,7 @@ use App\Mail\WelcomeUserMail;
 
 /*
 |--------------------------------------------------------------------------
-| 1. FRONTEND ROUTES (Công khai cho khách)
+| 1. FRONTEND ROUTES
 |--------------------------------------------------------------------------
 */
 Route::get('/', [FrontendProductController::class, 'index'])->name('home');
@@ -82,7 +83,7 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 3. AUTH REQUIRED ROUTES (Phải đăng nhập)
+| 3. AUTH REQUIRED ROUTES
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
@@ -190,24 +191,28 @@ Route::controller(PaymentController::class)->group(function () {
 
 /**
  * HỆ THỐNG FIX LỖI TỰ ĐỘNG (Dành cho Hiếu)
- * Xóa sạch giỏ hàng lỗi và làm mới hệ thống
+ * Route này sẽ dọn dẹp Database Online cho giống Local
  */
 Route::get('/fix-system', function () {
     try {
-        // 1. LỆNH QUAN TRỌNG: Xóa sạch bảng giỏ hàng để reset số 1560 về 0
-        \Illuminate\Support\Facades\DB::table('carts')->delete(); 
+        // 1. Xóa sạch bảng giỏ hàng (Hết số 1580 rác)
+        DB::table('carts')->delete(); 
 
-        // 2. Dọn dẹp Cache hệ thống
+        // 2. Reset số lượng sản phẩm tồn kho về 20 (giống Local của Hiếu)
+        // Lưu ý: Cột này trong bảng products của bạn là 'quantity' hay 'stock' thì sửa lại cho đúng nhé
+        DB::table('products')->update(['quantity' => 20]);
+
+        // 3. Dọn dẹp Cache hệ thống
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         Artisan::call('view:clear');
         Artisan::call('route:clear');
 
-        // 3. Cập nhật Database (nếu có thay đổi mới)
+        // 4. Cập nhật Database
         Artisan::call('migrate --force');
 
-        return "<h3>ĐÃ QUÉT SẠCH RÁC THÀNH CÔNG!</h3>
-                <p>Bảng giỏ hàng đã về 0. Con số 1560 đã bị xóa.</p>
+        return "<h3>QUÉT DỌN THÀNH CÔNG!</h3>
+                <p>Giỏ hàng đã về 0 và số lượng sản phẩm đã reset về 20.</p>
                 <a href='/admin/dashboard' style='padding:10px; background:green; color:white; text-decoration:none;'>Quay lại Dashboard kiểm tra</a>";
     } catch (\Exception $e) {
         return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
