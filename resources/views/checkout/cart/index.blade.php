@@ -36,7 +36,8 @@
         @else
             <div class="row">
                 <div class="col-lg-8">
-                    <div class="card cart-card border-0 shadow-sm">
+                    {{-- Giao diện cho màn hình lớn (Desktop) --}}
+                    <div class="card cart-card border-0 shadow-sm d-none d-lg-block">
                         <div class="table-responsive">
                             <table class="table table-hover mb-0 align-middle">
                                 <thead class="table-light small text-uppercase">
@@ -93,6 +94,47 @@
                             </table>
                         </div>
                     </div>
+
+                    {{-- Giao diện cho màn hình nhỏ (Mobile) --}}
+                    <div class="d-lg-none">
+                        @foreach($cart as $id => $item)
+                        @php 
+                            $currentPrice = (float)($item['price'] ?? 0);
+                            $qty = (int)($item['quantity'] ?? 1);
+                            $itemTotal = $currentPrice * $qty;
+                        @endphp
+                        <div class="card cart-card border-0 shadow-sm mb-3" data-id="{{ $id }}">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-3">
+                                        <img src="{{ (!empty($item['image']) && file_exists(public_path('uploads/product/' . $item['image']))) ? asset('uploads/product/' . $item['image']) : asset('backend/img/no-image.png') }}" class="img-fluid rounded" style="object-fit: cover;">
+                                    </div>
+                                    <div class="col-9">
+                                        <div class="d-flex flex-column h-100">
+                                            <p class="fw-bold text-dark small mb-1">{{ $item['name'] ?? 'Sản phẩm' }}</p>
+                                            <p class="text-muted small mb-2">Đơn giá: <span class="fw-bold text-dark">{{ number_format($currentPrice, 0, ',', '.') }} đ</span></p>
+                                            
+                                            <div class="d-flex justify-content-between align-items-center mt-auto">
+                                                 <input type="number" class="form-control qty-input-field update-cart" 
+                                                       data-id="{{ $id }}" value="{{ $qty }}" min="1" style="width: 70px;">
+                                                
+                                                <span class="fw-bold text-dark small subtotal-item">{{ number_format($itemTotal, 0, ',', '.') }} đ</span>
+                                                
+                                                <form action="{{ route('cart.remove') }}" method="POST">
+                                                    @csrf
+                                                    <input type="hidden" name="product_id" value="{{ $id }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Xóa sản phẩm này khỏi giỏ hàng?')">
+                                                        <i class="fas fa-trash-alt"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @endforeach
+                    </div>
                 </div>
 
                 <div class="col-lg-4">
@@ -132,7 +174,8 @@
         $('.update-cart').on('change', function() {
             let quantity = $(this).val();
             let id = $(this).data('id');
-            let row = $(this).closest('tr');
+            // Tìm container của item (trên desktop là <tr>, mobile là div.card)
+            let cartItemContainer = $(this).closest('[data-id="' + id + '"]');
 
             if(quantity < 1) {
                 $(this).val(1);
@@ -149,8 +192,10 @@
                 },
                 success: function (response) {
                     if(response.success) {
-                        // Cập nhật thành tiền từng dòng
-                        row.find('.subtotal-item').text(response.newSubtotal);
+                        // Cập nhật thành tiền từng dòng (hoạt động cho cả 2 layout)
+                        // Phải tìm lại vì có 2 element giống nhau trong DOM (1 ẩn, 1 hiện)
+                        $('[data-id="' + id + '"]').find('.subtotal-item').text(response.newSubtotal);
+
                         // Cập nhật tổng tiền toàn giỏ hàng
                         $('.total-cart').text(response.newTotal);
                     }
