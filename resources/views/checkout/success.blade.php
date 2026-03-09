@@ -6,7 +6,7 @@
 <div class="container mt-5 mb-5">
     <div class="row justify-content-center">
         <div class="col-md-8">
-            <div class="card p-4 shadow-sm border-0 rounded-3 text-center">
+            <div class="card p-4 shadow-sm border-0 rounded-4 text-center">
                 <div class="mb-3">
                     <i class="fas fa-check-circle text-success fa-4x"></i>
                 </div>
@@ -16,29 +16,33 @@
                     <p class="mb-1">Mã đơn: <strong class="text-primary">#{{ $order->order_code ?? $order->id }}</strong></p>
                     <p class="mb-3">Trạng thái: <span class="badge bg-warning text-dark">{{ $order->status_label ?? 'Đang chờ xử lý' }}</span></p>
 
-                    {{-- PHẦN THANH TOÁN TỰ ĐỘNG (CHỈ HIỆN KHI CHỌN CHUYỂN KHOẢN) --}}
+                    {{-- PHẦN THANH TOÁN TỰ ĐỘNG --}}
                     @if($order->payment_method === 'bank')
-                        <div class="alert alert-light border p-4 my-4 shadow-sm">
-                            <h5 class="text-danger fw-bold mb-3"><i class="fas fa-university me-2"></i>THANH TOAN QUA NGÂN HÀNG</h5>
-                            <p class="mb-3">Số tiền cần thanh toán: <strong class="fs-4 text-dark">{{ number_format($order->total_price, 0, ',', '.') }} đ</strong></p>
+                        <div class="alert alert-light border p-4 my-4 shadow-sm rounded-3">
+                            <h5 class="text-danger fw-bold mb-3"><i class="fas fa-university me-2"></i>THANH TOÁN QUA NGÂN HÀNG</h5>
+                            <p class="mb-3">Số tiền: <strong class="fs-3 text-dark">{{ number_format($order->total_price, 0, ',', '.') }} đ</strong></p>
 
                             <div class="d-md-none d-grid gap-2">
-                                <a href="{{ $paymentLink }}" class="btn btn-success btn-lg py-3 fw-bold shadow-sm">
+                                <a href="{{ $paymentLink }}" id="openBankApp" class="btn btn-success btn-lg py-3 fw-bold shadow-sm">
                                     <i class="fas fa-mobile-alt me-2"></i> BẤM ĐỂ MỞ APP NGÂN HÀNG
                                 </a>
-                                <small class="text-muted">Hệ thống sẽ tự động nhập STK, Số tiền & Nội dung</small>
+                                <small class="text-muted">Mở App ngân hàng, thông tin sẽ được tự động điền</small>
                             </div>
 
                             <div class="d-none d-md-block mt-3">
                                 <p class="small text-muted mb-2">Dùng App Ngân hàng quét mã QR dưới đây:</p>
-                                <img src="{{ $qrImageUrl }}" alt="Mã QR Thanh toán" class="img-thumbnail shadow-sm" style="max-width: 250px;">
+                                <div class="bg-white d-inline-block p-2 border rounded shadow-sm">
+                                    <img src="{{ $qrImageUrl }}" alt="Mã QR Thanh toán" style="max-width: 280px; height: auto;">
+                                </div>
                                 <div class="mt-2 small text-secondary">
-                                    Nội dung: <strong>NatureShop{{ $order->id }}</strong>
+                                    Nội dung CK: <strong>NatureShop{{ $order->id }}</strong>
                                 </div>
                             </div>
 
                             <div class="mt-3 p-2 bg-warning bg-opacity-10 rounded">
-                                <small class="text-danger"><i class="fas fa-info-circle"></i> Vui lòng không sửa nội dung chuyển khoản để đơn hàng được duyệt tự động.</small>
+                                <small class="text-danger fw-bold">
+                                    <i class="fas fa-info-circle"></i> Vui lòng giữ nguyên nội dung chuyển khoản để hệ thống tự động xác nhận đơn hàng.
+                                </small>
                             </div>
                         </div>
                     @endif
@@ -59,4 +63,22 @@
         </div>
     </div>
 </div>
+
+{{-- SCRIPT HỖ TRỢ MỞ APP NHANH --}}
+<script>
+    document.getElementById('openBankApp')?.addEventListener('click', function(e) {
+        // Một số trình duyệt Mobile cần "mồi" bằng giao thức vietqr://
+        // Chúng ta tạo một iframe ẩn để thử kích hoạt App trước
+        const deepLink = "vietqr://payment?{{ parse_url($paymentLink, PHP_URL_QUERY) }}";
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.src = deepLink;
+        document.body.appendChild(iframe);
+        
+        // Sau đó vẫn cho phép chuyển hướng đến link ảnh VietQR như bình thường để đảm bảo 100% hoạt động
+        setTimeout(() => {
+            document.body.removeChild(iframe);
+        }, 500);
+    });
+</script>
 @endsection
