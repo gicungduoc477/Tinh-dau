@@ -12,8 +12,8 @@ use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
-use App\Models\OrderStatusHistory;
-use App\Mail\OrderPlacedMail;
+use App\Models\OrderStatusHistory; // Thêm Model này
+use App\Mail\OrderPlacedMail;      // Thêm Mail này
 
 class CheckoutController extends Controller
 {
@@ -63,6 +63,7 @@ class CheckoutController extends Controller
      */
     public function place(Request $request)
     {
+        // 1. Xác thực dữ liệu
         $request->validate([
             'full_name'       => 'required|string|max:255',
             'email'           => 'nullable|email|max:255',
@@ -75,6 +76,7 @@ class CheckoutController extends Controller
         $items = [];
         $totalOrder = 0;
 
+        // 2. Lấy dữ liệu giỏ hàng
         if (Auth::check()) {
             $dbCart = Cart::where('user_id', Auth::id())->with('product')->get();
             foreach ($dbCart as $c) {
@@ -107,6 +109,7 @@ class CheckoutController extends Controller
         $shippingFee = $shippingMethod === 'express' ? 20000 : 0;
         $totalWithShipping = $totalOrder + $shippingFee;
 
+        // 3. Tiến hành lưu đơn hàng (Transaction)
         DB::beginTransaction();
         try {
             $order = Order::create([
@@ -132,6 +135,7 @@ class CheckoutController extends Controller
                     'price'      => $it['price'],
                 ]);
 
+                // Cập nhật tồn kho
                 $product = Product::find($it['product_id']);
                 if ($product) {
                     if ($product->stock < $it['quantity']) {
@@ -141,6 +145,7 @@ class CheckoutController extends Controller
                 }
             }
 
+            // --- LƯU LỊCH SỬ TRẠNG THÁI ---
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => null,
@@ -149,6 +154,7 @@ class CheckoutController extends Controller
                 'note'        => 'Khách hàng đặt hàng thành công (Hình thức: ' . strtoupper($request->payment_method) . ')',
             ]);
 
+            // 4. Xóa giỏ hàng
             if (Auth::check()) {
                 Cart::where('user_id', Auth::id())->delete();
             } else {
@@ -159,12 +165,15 @@ class CheckoutController extends Controller
 
             DB::commit();
 
+            // --- GỬI EMAIL XÁC NHẬN ---
+            // Đặt ngoài commit nhưng trong try-catch để nếu lỗi Mail thì vẫn không hỏng đơn hàng
             try {
                 if ($order->customer_email) {
                     Mail::to($order->customer_email)->send(new OrderPlacedMail($order));
                 }
             } catch (\Exception $mailEx) {
                 Log::error('Mail Error: ' . $mailEx->getMessage());
+                // Không throw lỗi ở đây để khách vẫn thấy thông báo đặt hàng thành công
             }
 
             return redirect()->route('checkout.success')->with('message', 'Đặt hàng thành công!');
@@ -177,7 +186,7 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Trang thông báo thành công - Tối ưu Redirect mở thẳng App Ngân hàng
+     * Trang thông báo thành công
      */
     public function success()
     {
@@ -188,24 +197,6 @@ class CheckoutController extends Controller
             $order = Order::where('user_id', Auth::id())->latest()->first();
         }
 
-        if (!$order) {
-            return redirect()->route('home');
-        }
-
-        // --- CẤU HÌNH NGÂN HÀNG CỦA HIẾU ---
-        $bank = "vcb"; // vcb, mbb, tcb, acb...
-        $stk = "123456789"; // Thay bằng STK thật của Hiếu
-        
-        $amount = (int)$order->total_price;
-        $memo = "NatureShop" . $order->id;
-
-        // 1. LINK ĐIỀU HƯỚNG THÔNG MINH (api.vietqr.io v2): 
-        // Dùng cho nút bấm trên Mobile để kích hoạt mở thẳng App
-        $paymentLink = "https://api.vietqr.io/v2/generate/{$bank}/{$stk}/{$amount}/{$memo}";
-        
-        // 2. LINK ẢNH QR: Dùng để hiển thị trực tiếp trên trang cho máy tính quét
-        $qrImageUrl = "https://img.vietqr.io/image/{$bank}-{$stk}-compact2.jpg?amount={$amount}&addInfo={$memo}";
-
-        return view('checkout.success', compact('order', 'paymentLink', 'qrImageUrl'));
+        return view('checkout.success', compact('order'));
     }
 }
