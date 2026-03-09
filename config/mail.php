@@ -8,7 +8,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Laravel sẽ ưu tiên lấy giá trị MAIL_MAILER từ file .env.
-    | Nếu không có, nó sẽ mặc định dùng 'log' để tránh bị treo trang.
+    | Trên Render, hãy đảm bảo đặt MAIL_MAILER=sendinblue
+    |
     */
 
     'default' => env('MAIL_MAILER', 'log'),
@@ -32,9 +33,9 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],
 
-        // Driver này dùng API để gửi mail trên Render (Vượt qua tường lửa)
+        // Cấu hình Brevo API (Đã cập nhật transport thành 'brevo')
         'sendinblue' => [
-            'transport' => 'sendinblue',
+            'transport' => 'brevo', 
         ],
 
         'log' => [
