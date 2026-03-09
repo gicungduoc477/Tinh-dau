@@ -16,7 +16,6 @@
                     <p class="mb-1">Mã đơn: <strong class="text-primary">#{{ $order->order_code ?? $order->id }}</strong></p>
                     <p class="mb-3">Trạng thái: <span class="badge bg-warning text-dark">{{ $order->status_label ?? 'Đang chờ xử lý' }}</span></p>
 
-                    {{-- PHẦN THANH TOÁN TỰ ĐỘNG --}}
                     @if($order->payment_method === 'bank')
                         <div class="alert alert-light border p-4 my-4 shadow-sm rounded-3">
                             <h5 class="text-danger fw-bold mb-3"><i class="fas fa-university me-2"></i>THANH TOÁN QUA NGÂN HÀNG</h5>
@@ -26,7 +25,7 @@
                                 <a href="{{ $paymentLink }}" id="openBankApp" class="btn btn-success btn-lg py-3 fw-bold shadow-sm">
                                     <i class="fas fa-mobile-alt me-2"></i> BẤM ĐỂ MỞ APP NGÂN HÀNG
                                 </a>
-                                <small class="text-muted">Mở App ngân hàng, thông tin sẽ được tự động điền</small>
+                                <small class="text-muted">Hệ thống sẽ tự động điền thông tin khi App mở lên</small>
                             </div>
 
                             <div class="d-none d-md-block mt-3">
@@ -39,9 +38,12 @@
                                 </div>
                             </div>
 
-                            <div class="mt-3 p-2 bg-warning bg-opacity-10 rounded">
-                                <small class="text-danger fw-bold">
-                                    <i class="fas fa-info-circle"></i> Vui lòng giữ nguyên nội dung chuyển khoản để hệ thống tự động xác nhận đơn hàng.
+                            <div class="mt-3 p-2 bg-warning bg-opacity-10 rounded text-start">
+                                <small class="text-danger fw-bold d-block text-center">
+                                    <i class="fas fa-info-circle"></i> QUAN TRỌNG:
+                                </small>
+                                <small class="text-dark">
+                                    Vui lòng giữ nguyên nội dung chuyển khoản <strong>NatureShop{{ $order->id }}</strong> để đơn hàng được tự động kích hoạt ngay lập tức.
                                 </small>
                             </div>
                         </div>
@@ -64,21 +66,20 @@
     </div>
 </div>
 
-{{-- SCRIPT HỖ TRỢ MỞ APP NHANH --}}
+{{-- SCRIPT FIX LỖI KHÔNG MỞ APP --}}
 <script>
     document.getElementById('openBankApp')?.addEventListener('click', function(e) {
-        // Một số trình duyệt Mobile cần "mồi" bằng giao thức vietqr://
-        // Chúng ta tạo một iframe ẩn để thử kích hoạt App trước
-        const deepLink = "vietqr://payment?{{ parse_url($paymentLink, PHP_URL_QUERY) }}";
-        const iframe = document.createElement("iframe");
-        iframe.style.display = "none";
-        iframe.src = deepLink;
-        document.body.appendChild(iframe);
-        
-        // Sau đó vẫn cho phép chuyển hướng đến link ảnh VietQR như bình thường để đảm bảo 100% hoạt động
+        // Không ngăn chặn sự kiện mặc định, để trình duyệt xử lý link API
+        // Nhưng thêm một lớp thông báo nhỏ để khách biết app đang được gọi
+        const btn = this;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> ĐANG MỞ APP...';
+        btn.classList.add('disabled');
+
         setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 500);
+            btn.innerHTML = originalText;
+            btn.classList.remove('disabled');
+        }, 3000);
     });
 </script>
 @endsection

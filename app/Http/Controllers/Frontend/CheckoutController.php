@@ -177,7 +177,7 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Trang thông báo thành công - Tối ưu Deep Link mở App Ngân hàng
+     * Trang thông báo thành công - Tối ưu Redirect mở thẳng App Ngân hàng
      */
     public function success()
     {
@@ -193,19 +193,18 @@ class CheckoutController extends Controller
         }
 
         // --- CẤU HÌNH NGÂN HÀNG CỦA HIẾU ---
-        $bank = "vcb"; // vcb (Vietcombank), mbb (MB Bank), tcb (Techcombank)...
-        $stk = "123456789"; // SỐ TÀI KHOẢN của Hiếu
-        $accName = "BUI VAN HIEU"; // Tên không dấu
+        $bank = "vcb"; // vcb, mbb, tcb, acb...
+        $stk = "123456789"; // Thay bằng STK thật của Hiếu
         
         $amount = (int)$order->total_price;
-        $memo = "NatureShop" . $order->id; // Nội dung không dấu, không khoảng cách
+        $memo = "NatureShop" . $order->id;
 
-        // LINK DEEP LINK (QUAN TRỌNG): 
-        // Khi dùng link này trên mobile, nó sẽ gợi ý mở App ngân hàng trực tiếp.
-        $paymentLink = "https://img.vietqr.io/image/{$bank}-{$stk}-compact2.jpg?amount={$amount}&addInfo={$memo}&accountName=" . urlencode($accName);
+        // 1. LINK ĐIỀU HƯỚNG THÔNG MINH (api.vietqr.io v2): 
+        // Dùng cho nút bấm trên Mobile để kích hoạt mở thẳng App
+        $paymentLink = "https://api.vietqr.io/v2/generate/{$bank}/{$stk}/{$amount}/{$memo}";
         
-        // Link ảnh QR hiển thị (Dùng chung link trên cũng được)
-        $qrImageUrl = $paymentLink;
+        // 2. LINK ẢNH QR: Dùng để hiển thị trực tiếp trên trang cho máy tính quét
+        $qrImageUrl = "https://img.vietqr.io/image/{$bank}-{$stk}-compact2.jpg?amount={$amount}&addInfo={$memo}";
 
         return view('checkout.success', compact('order', 'paymentLink', 'qrImageUrl'));
     }
