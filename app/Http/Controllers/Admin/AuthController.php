@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-// --- CÁC DÒNG KHAI BÁO ĐỂ CHẠY MAIL VÀ LOG ---
+// --- ĐẢM BẢO CÁC DÒNG NÀY ĐẦY ĐỦ ĐỂ HẾT BÁO ĐỎ ---
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use App\Mail\WelcomeUserMail;
@@ -48,21 +48,18 @@ class AuthController extends Controller
         $fieldType = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
         $user = User::where($fieldType, $identifier)->first();
 
-        // 1. Kiểm tra tồn tại và mật khẩu
         if (!$user || !Hash::check($password, $user->password)) {
             return back()->withErrors(['identifier' => 'Thông tin đăng nhập không chính xác.'])
                          ->withInput()
                          ->with('error', 'Thông tin đăng nhập không chính xác.');
         }
 
-        // 2. CHẶN KHÁCH HÀNG: Chỉ Admin mới được vào
         if ($user->role !== 'admin') {
             return back()->withErrors(['identifier' => 'Bạn không có quyền truy cập vào khu vực quản trị.'])
                          ->withInput()
                          ->with('error', 'Tài khoản của bạn không có quyền Quản trị viên.');
         }
 
-        // 3. Đăng nhập và tạo lại Session
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
@@ -97,14 +94,18 @@ class AuthController extends Controller
             'role' => 'admin', 
         ]);
 
-        // --- BẮT ĐẦU LOGIC GỬI MAIL ---
+        // --- LOGIC GỬI MAIL CÓ GHI LOG CHI TIẾT ---
         try {
             Mail::to($user->email)->send(new WelcomeUserMail($user));
         } catch (\Exception $e) {
-            // Dòng này sẽ không còn báo đỏ sau khi thêm 'use Log' ở đầu file
-            Log::error("Lỗi gửi mail đăng ký Admin: " . $e->getMessage());
+            // Ghi lỗi chi tiết vào file log của Render để dễ kiểm tra
+            Log::error("==========================================");
+            Log::error("LỖI GỬI MAIL TẠI RENDER:");
+            Log::error("Message: " . $e->getMessage());
+            Log::error("Trace: " . $e->getTraceAsString());
+            Log::error("==========================================");
         }
-        // --- KẾT THÚC LOGIC GỬI MAIL ---
+        // -------------------------------------------
 
         Auth::login($user);
 
@@ -112,7 +113,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Đăng xuất Admin và chuyển hướng về trang chủ Website
+     * Đăng xuất Admin
      */
     public function logout(Request $request)
     {
