@@ -26,16 +26,16 @@ class AppServiceProvider extends ServiceProvider
         Paginator::useBootstrapFive();
 
         // 2. ÉP DÙNG HTTPS KHI CHẠY TRÊN RENDER
+        // Sửa lỗi submit không bảo mật khi đăng nhập/đăng ký
         if (config('app.env') !== 'local') {
             URL::forceScheme('https');
 
             // 3. TỰ ĐỘNG XÓA CACHE CẤU HÌNH (Dành cho Render bản Free)
-            // Giúp Laravel nhận đúng cấu hình Mail Port 465 và Driver SMTP
+            // Giúp Laravel nhận đúng cấu hình Port 465 từ file config/mail.php
             try {
                 Artisan::call('config:clear');
-                Artisan::call('cache:clear');
             } catch (\Exception $e) {
-                // Bỏ qua nếu có lỗi trong quá trình xóa cache
+                // Bỏ qua nếu môi trường Render bản Free không cho phép chạy lệnh nội bộ
             }
         }
 
