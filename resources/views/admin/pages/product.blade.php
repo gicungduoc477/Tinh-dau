@@ -60,9 +60,25 @@
                             <td class="text-center align-middle">{{ $products->firstItem() + $key }}</td>
                             <td class="text-center align-middle">
                                 <div style="width: 60px; height: 60px; margin: 0 auto; overflow: hidden; background: #f8f9fc; border: 1px solid #e3e6f0; border-radius: 5px;">
-                                    <img src="{{ $pro->image ? asset('uploads/product/' . $pro->image) : asset('backend/img/no-image.png') }}" 
+                                    @php
+                                        $imagePath = $pro->image;
+                                        $finalUrl = asset('backend/img/no-image.png');
+
+                                        if ($imagePath) {
+                                            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+                                                // Nếu là link Cloudinary (có http/https)
+                                                $finalUrl = $imagePath;
+                                            } else {
+                                                // Nếu là ảnh Local (máy nhà Laragon)
+                                                // Xử lý sạch đường dẫn để tránh bị lặp 'uploads/product'
+                                                $cleanPath = str_replace(['public/', 'uploads/product/'], '', $imagePath);
+                                                $finalUrl = asset('uploads/product/' . $cleanPath);
+                                            }
+                                        }
+                                    @endphp
+                                    <img src="{{ $finalUrl }}" 
                                          style="width: 100%; height: 100%; object-fit: cover;" 
-                                         onerror="this.src='{{ asset('backend/img/no-image.png') }}'">
+                                         onerror="this.onerror=null;this.src='{{ asset('backend/img/no-image.png') }}'">
                                 </div>
                             </td>
                             <td class="align-middle"><strong>{{ $pro->name }}</strong></td>
@@ -106,6 +122,7 @@
     </div>
 </div>
 
+{{-- Modal Thêm Sản Phẩm --}}
 <div class="modal fade" id="addProductModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <form action="{{ route('admin.product.store') }}" method="POST" enctype="multipart/form-data">
@@ -196,16 +213,13 @@
 </div>
 
 <script>
-    // Xử lý Input File và Preview
+    // Xử lý Preview ảnh khi chọn file trong Modal
     document.getElementById('imgInputModal')?.addEventListener('change', function(e) {
         const file = this.files[0];
         if (file) {
-            // Hiển thị tên file lên label (Bootstrap 4)
-            let fileName = file.name;
             let label = this.nextElementSibling;
-            label.innerText = fileName;
+            label.innerText = file.name;
             
-            // Preview ảnh bằng FileReader
             const reader = new FileReader();
             reader.onload = function(e) {
                 document.getElementById('previewModal').setAttribute('src', e.target.result);

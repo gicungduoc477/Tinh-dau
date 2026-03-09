@@ -7,8 +7,8 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-// THÊM DÒNG NÀY ĐỂ DÙNG CLOUDINARY
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends Controller
 {
@@ -97,39 +97,41 @@ class ProductController extends Controller
     public function destroy($id) 
     {
         $product = Product::findOrFail($id);
-
-        // Lưu ý: Với Cloudinary, việc xóa ảnh cần Public ID. 
-        // Tạm thời xóa record trong DB, ảnh trên Cloud sẽ quản lý sau.
         $product->delete();
         return redirect()->route('admin.product.index')->with('message', 'Đã xóa sản phẩm thành công!');
     }
 
     /**
-     * Hàm lưu dữ liệu (Sử dụng Cloudinary cho Render Free)
+     * Hàm lưu dữ liệu (Tối ưu cho cả Local và Cloudinary)
      */
     private function saveProduct(Product $product, Request $request)
     {
         $product->name = $request->name;
         $product->price = $request->price;
-        $product->stock = $request->stock ?? 0; // Luôn dùng 'stock' để tránh lỗi 'quantity'
+        $product->stock = $request->stock ?? 0; 
         $product->category_id = $request->category_id;
         $product->classification = $request->classification;
         $product->description = $request->description;
 
         if ($request->hasFile('image')) {
-            // Defensive check: Only attempt to upload if Cloudinary is configured.
-            // This prevents crashes in environments where credentials are not set.
-            if (config('cloudinary.cloud_url')) {
-                // Upload to Cloudinary and get the secure URL
-                $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
-                    'folder' => 'tinh_dau_shop/products',
-                ])->getSecurePath();
-                
-                // Save the URL directly to the image column in the database
-                $product->image = $uploadedFileUrl;
+            // ƯU TIÊN 1: Sử dụng Cloudinary nếu có cấu hình (Dành cho Render)
+            if (config('cloudinary.cloud_url') || env('CLOUDINARY_URL')) {
+                try {
+                    $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
+                        'folder' => 'tinh_dau_shop/products',
+                    ])->getSecurePath();
+                    
+                    $product->image = $uploadedFileUrl;
+                } catch (\Exception $e) {
+                    Log::error("Cloudinary Error: " . $e->getMessage());
+                    // Fallback sang local nếu Cloudinary lỗi
+                    $this->saveLocalImage($product, $request);
+                }
+            } 
+            // ƯU TIÊN 2: Lưu Local nếu không có Cloudinary (Dành cho Laragon)
+            else {
+                $this->saveLocalImage($product, $request);
             }
-            // If Cloudinary is not configured, the image upload is silently skipped.
-            // The product is still updated, but the image is not.
         }
 
         $product->slug = $this->createUniqueSlug($request->name, $product->id ?? 0);
@@ -137,8 +139,25 @@ class ProductController extends Controller
     }
 
     /**
-     * Tạo Slug không trùng lặp
+     * Hỗ trợ lưu ảnh vào thư mục public/uploads/product
      */
+    private function saveLocalImage(Product $product, Request $request)
+    {
+        $file = $request->file('image');
+        $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
+        
+        // Đảm bảo thư mục tồn tại
+        $path = public_path('uploads/product');
+        if (!file_exists($path)) {
+            mkdir($path, 0777, true);
+        }
+
+        $file->move($path, $filename);
+        
+        // Chỉ lưu đường dẫn tương đối để asset() ở View hoạt động đúng
+        $product->image = 'uploads/product/' . $filename;
+    }
+
     private function createUniqueSlug($name, $id = 0)
     {
         $slug = Str::slug($name);
