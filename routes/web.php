@@ -5,7 +5,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Order;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB; // Thêm DB Facade
 
 // Admin Controllers
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -17,7 +17,7 @@ use App\Http\Controllers\Admin\ReviewController as AdminReviewController;
 
 // Frontend Controllers
 use App\Http\Controllers\Frontend\ProductController as FrontendProductController;
-use App\Http\Controllers\Frontend\FrontendCartController as FrontendCartController;
+use App\Http\Controllers\Frontend\CartController as FrontendCartController;
 use App\Http\Controllers\Frontend\CheckoutController as FrontendCheckoutController;
 use App\Http\Controllers\Frontend\OrderController as FrontendOrderController;
 use App\Http\Controllers\Frontend\ReviewController as FrontendReviewController;
@@ -190,21 +190,17 @@ Route::controller(PaymentController::class)->group(function () {
 });
 
 /**
- * HỆ THỐNG FIX LỖI TRIỆT ĐỂ (Xóa sạch rác & Cấp quyền ảnh)
+ * HỆ THỐNG FIX LỖI TỰ ĐỘNG (Dành cho Hiếu)
+ * Route này sẽ dọn dẹp Database Online cho giống Local
  */
 Route::get('/fix-system', function () {
     try {
-        // 1. Cấp quyền ghi file & Liên kết Storage (Fix lỗi upload ảnh)
-        Artisan::call('storage:link');
+        // 1. Xóa sạch bảng giỏ hàng (Hết số 1580 rác)
+        DB::table('carts')->delete(); 
 
-        // 2. Xóa sạch dữ liệu cũ (Dùng delete từng bảng để lách luật TiDB)
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        DB::table('carts')->delete();
-        DB::table('order_items')->delete();
-        DB::table('orders')->delete();
-        DB::table('products')->delete();
-        DB::table('categories')->delete();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // 2. Reset số lượng sản phẩm tồn kho về 20 (giống Local của Hiếu)
+        // Lưu ý: Cột này trong bảng products của bạn là 'quantity' hay 'stock' thì sửa lại cho đúng nhé
+        DB::table('products')->update(['quantity' => 20]);
 
         // 3. Dọn dẹp Cache hệ thống
         Artisan::call('config:clear');
@@ -212,16 +208,18 @@ Route::get('/fix-system', function () {
         Artisan::call('view:clear');
         Artisan::call('route:clear');
 
-        return "<h3>FIX LỖI THÀNH CÔNG!</h3>
-                <p>1. Đã cấp quyền upload ảnh vào Storage.</p>
-                <p>2. Đã xóa sạch 1600 sản phẩm rác (Database hiện tại trống).</p>
-                <a href='/admin/product/create' style='padding:10px; background:green; color:white; text-decoration:none;'>THỬ THÊM SẢN PHẨM NGAY</a>";
+        // 4. Cập nhật Database
+        Artisan::call('migrate --force');
+
+        return "<h3>QUÉT DỌN THÀNH CÔNG!</h3>
+                <p>Giỏ hàng đã về 0 và số lượng sản phẩm đã reset về 20.</p>
+                <a href='/admin/dashboard' style='padding:10px; background:green; color:white; text-decoration:none;'>Quay lại Dashboard kiểm tra</a>";
     } catch (\Exception $e) {
         return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
     }
 });
 
-// Preview Mail
+// Preview Mail (Dev only)
 Route::get('/dev/mail-preview', function () {
     $user = User::first() ?? new User(['name' => 'Khách Hàng', 'email' => 'demo@example.com']);
     return new WelcomeUserMail($user);

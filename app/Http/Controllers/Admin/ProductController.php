@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage; // Thay File bằng Storage
+use Illuminate\Support\Facades\File; 
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -59,6 +59,9 @@ class ProductController extends Controller
         return redirect()->route('admin.product.index')->with('message', 'Thêm sản phẩm thành công!');
     }
 
+    /**
+     * 3. Trang chỉnh sửa
+     */
     public function edit($id) 
     {
         $product = Product::findOrFail($id); 
@@ -66,6 +69,9 @@ class ProductController extends Controller
         return view('admin.pages.edit_product', compact('product', 'categories'));
     }
 
+    /**
+     * 4. Cập nhật sản phẩm
+     */
     public function update(Request $request, $id) 
     {
         $product = Product::findOrFail($id);
@@ -84,13 +90,18 @@ class ProductController extends Controller
         return redirect()->route('admin.product.index')->with('message', 'Cập nhật sản phẩm thành công!');
     }
 
+    /**
+     * 5. Xóa sản phẩm và ảnh đi kèm
+     */
     public function destroy($id) 
     {
         $product = Product::findOrFail($id);
 
-        // Xóa ảnh thông qua Storage
         if ($product->image) {
-            Storage::disk('public')->delete($product->image);
+            $imagePath = public_path('uploads/product/' . $product->image);
+            if (File::exists($imagePath)) {
+                File::delete($imagePath);
+            }
         }
 
         $product->delete();
@@ -98,8 +109,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Hàm dùng chung để Lưu/Cập nhật dữ liệu
-     * Đã cập nhật cơ chế lưu file vào Storage cho Render
+     * Hàm lưu dữ liệu dùng chung (Tối ưu cho Render)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -111,23 +121,41 @@ class ProductController extends Controller
         $product->description = $request->description;
 
         if ($request->hasFile('image')) {
-            // 1. Xóa ảnh cũ nếu có
-            if ($product->image) {
-                Storage::disk('public')->delete($product->image);
+            $uploadPath = public_path('uploads/product');
+
+            // Tự động tạo thư mục nếu Render chưa có
+            if (!File::isDirectory($uploadPath)) {
+                File::makeDirectory($uploadPath, 0777, true, true);
             }
 
-            // 2. Lưu file mới vào folder 'uploads/product' trong storage/app/public
-            // store() sẽ tự tạo tên file ngẫu nhiên để tránh trùng lặp
-            $path = $request->file('image')->store('uploads/product', 'public');
+            // Xóa ảnh cũ để tiết kiệm dung lượng server
+            if ($product->image) {
+                $oldPath = $uploadPath . '/' . $product->image;
+                if (File::exists($oldPath)) {
+                    File::delete($oldPath);
+                }
+            }
+
+            // Xử lý file mới
+            $file = $request->file('image');
+            $extension = $file->getClientOriginalExtension();
+            // Đặt tên file: thời gian + tên đã slug (ví dụ: 1709123456_tinh-dau-buoi.jpg)
+            $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $extension;
             
-            // 3. Lưu đường dẫn vào database
-            $product->image = $path;
+            // Di chuyển file vào public/uploads/product
+            $file->move($uploadPath, $filename);
+            
+            // Lưu TÊN FILE vào database (không lưu đường dẫn dài)
+            $product->image = $filename;
         }
 
         $product->slug = $this->createUniqueSlug($request->name, $product->id ?? 0);
         $product->save();
     }
 
+    /**
+     * Tạo Slug không trùng lặp
+     */
     private function createUniqueSlug($name, $id = 0)
     {
         $slug = Str::slug($name);

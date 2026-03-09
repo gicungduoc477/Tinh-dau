@@ -6,14 +6,14 @@
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Cập nhật sản phẩm</h1>
-        <a href="{{ route('admin.product.index') }}" class="d-none d-sm-inline-block btn btn-sm btn-secondary shadow-sm">
+        <a href="{{ route('admin.product.index') }}" class="btn btn-sm btn-secondary shadow-sm">
             <i class="fas fa-arrow-left fa-sm text-white-50"></i> Quay lại danh sách
         </a>
     </div>
 
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Thông tin chi tiết sản phẩm: {{ $product->name }}</h6>
+        <div class="card-header py-3 bg-white">
+            <h6 class="m-0 font-weight-bold text-primary">Thông tin chi tiết: <span class="text-dark">{{ $product->name }}</span></h6>
         </div>
         <div class="card-body">
             @if ($errors->any())
@@ -37,17 +37,17 @@
                     <div class="col-md-8">
                         <div class="form-group">
                             <label class="font-weight-bold">Tên sản phẩm <span class="text-danger">*</span></label>
-                            <input type="text" name="name" class="form-control" value="{{ old('name', $product->name) }}" placeholder="Nhập tên sản phẩm..." required>
+                            <input type="text" name="name" class="form-control" value="{{ old('name', $product->name) }}" required>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group col-md-6">
                                 <label class="font-weight-bold">Giá bán (VNĐ) <span class="text-danger">*</span></label>
-                                <input type="number" name="price" class="form-control" value="{{ old('price', $product->price) }}" required>
+                                <input type="number" name="price" class="form-control" value="{{ old('price', $product->price) }}" required min="0">
                             </div>
                             <div class="form-group col-md-6">
                                 <label class="font-weight-bold">Số lượng trong kho</label>
-                                <input type="number" name="stock" class="form-control" value="{{ old('stock', $product->stock) }}">
+                                <input type="number" name="stock" class="form-control" value="{{ old('stock', $product->stock) }}" min="0">
                             </div>
                         </div>
 
@@ -64,41 +64,48 @@
                                 </select>
                             </div>
                             <div class="form-group col-md-6">
-                                <label class="font-weight-bold">Phân loại loại hình</label>
+                                <label class="font-weight-bold">Phân loại</label>
                                 <select name="classification" class="form-control">
                                     <option value="">-- Không chọn --</option>
                                     <option value="Tinh dầu nguyên chất" {{ old('classification', $product->classification) == 'Tinh dầu nguyên chất' ? 'selected' : '' }}>Tinh dầu nguyên chất</option>
-                                    <option value="Tinh dầu không nguyên chất" {{ old('classification', $product->classification) == 'Tinh dầu không nguyên chất' ? 'selected' : '' }}>Tinh dầu không nguyên chất</option>
+                                    <option value="Hương liệu pha" {{ old('classification', $product->classification) == 'Hương liệu pha' ? 'selected' : '' }}>Hương liệu pha</option>
                                     <option value="Tinh dầu hỗn hợp (Blend Oil)" {{ old('classification', $product->classification) == 'Tinh dầu hỗn hợp (Blend Oil)' ? 'selected' : '' }}>Tinh dầu hỗn hợp (Blend Oil)</option>
                                 </select>
                             </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="font-weight-bold">Mô tả sản phẩm</label>
+                            <textarea name="description" class="form-control" rows="5">{{ old('description', $product->description) }}</textarea>
                         </div>
                     </div>
 
                     <div class="col-md-4 border-left">
                         <div class="form-group">
-                            <label class="font-weight-bold">Ảnh sản phẩm hiện tại</label>
-                            <div class="custom-file mb-3">
-                                <input type="file" name="image" class="custom-file-input" id="imgInputEdit" accept="image/*">
-                                <label class="custom-file-label" for="imgInputEdit text-truncate">Chọn ảnh mới...</label>
-                            </div>
+                            <label class="font-weight-bold text-primary">Ảnh sản phẩm</label>
                             
-                            <div class="text-center p-3 border rounded bg-light" style="min-height: 250px; display: flex; align-items: center; justify-content: center;">
+                            <div class="text-center p-3 border rounded bg-light mb-3" style="min-height: 250px; display: flex; align-items: center; justify-content: center;">
                                 <img id="previewEdit" 
                                      src="{{ $product->image ? asset('uploads/product/'.$product->image) : asset('backend/img/no-image.png') }}" 
-                                     style="max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 5px; shadow: 0 0 5px rgba(0,0,0,0.1);">
+                                     style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px;"
+                                     onerror="this.src='{{ asset('backend/img/no-image.png') }}'">
                             </div>
-                            <small class="form-text text-muted text-center mt-2">Ảnh xem trước (Nên chọn ảnh vuông 1:1)</small>
+
+                            <div class="custom-file">
+                                <input type="file" name="image" class="custom-file-input" id="imgInputEdit" accept="image/*">
+                                <label class="custom-file-label text-truncate" for="imgInputEdit">Thay đổi ảnh...</label>
+                            </div>
+                            <small class="form-text text-muted mt-2 text-center italic text-danger">Lưu ý: Chỉ chọn ảnh nếu bạn muốn thay đổi ảnh cũ.</small>
                         </div>
                     </div>
                 </div>
 
-                <hr>
+                <hr class="mt-4">
 
-                <div class="form-group mt-4 d-flex justify-content-end">
-                    <button type="reset" class="btn btn-light mr-2 border">Hủy thay đổi</button>
-                    <button type="submit" class="btn btn-primary px-5 shadow-sm">
-                        <i class="fas fa-save mr-1"></i> Lưu thay đổi ngay
+                <div class="form-group d-flex justify-content-end mb-0">
+                    <a href="{{ route('admin.product.index') }}" class="btn btn-light mr-2 border">Hủy bỏ</a>
+                    <button type="submit" class="btn btn-primary px-5 shadow">
+                        <i class="fas fa-save mr-1"></i> Cập nhật ngay
                     </button>
                 </div>
             </form>
@@ -112,15 +119,15 @@
         const preview = document.getElementById('previewEdit');
 
         imgInput.addEventListener('change', function(e) {
-            // 1. Xử lý xem trước ảnh
             const [file] = this.files;
             if (file) {
+                // 1. Cập nhật ảnh xem trước ngay lập tức
                 preview.src = URL.createObjectURL(file);
                 
-                // 2. Cập nhật tên file vào nhãn (label) của Bootstrap
-                let fileName = e.target.files[0].name;
-                let nextSibling = e.target.nextElementSibling;
-                nextSibling.innerText = fileName;
+                // 2. Hiện tên file lên thanh input
+                let fileName = file.name;
+                let label = this.nextElementSibling;
+                label.innerText = fileName;
             }
         });
     });
