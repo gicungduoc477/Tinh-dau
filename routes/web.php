@@ -190,30 +190,33 @@ Route::controller(PaymentController::class)->group(function () {
 });
 
 /**
- * HỆ THỐNG FIX LỖI TỰ ĐỘNG (Dành cho Hiếu)
- * Route này sẽ dọn dẹp Database Online cho giống Local
+ * HỆ THỐNG XÓA SẠCH DỮ LIỆU RÁC (Dành cho Hiếu)
+ * Route này sẽ đưa Database về trạng thái trống trơn hoàn toàn.
  */
 Route::get('/fix-system', function () {
     try {
-        // 1. Xóa sạch bảng giỏ hàng (Hết số 1580 rác)
-        DB::table('carts')->delete(); 
+        // 1. Tắt kiểm tra khóa ngoại để xóa tận gốc
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
 
-        // 2. Reset số lượng sản phẩm tồn kho về 20 (giống Local của Hiếu)
-        // Lưu ý: Cột này trong bảng products của bạn là 'quantity' hay 'stock' thì sửa lại cho đúng nhé
-        DB::table('products')->update(['quantity' => 20]);
+        // 2. LỆNH QUAN TRỌNG: TRUNCATE xóa sạch dữ liệu và reset ID về 1
+        DB::table('carts')->truncate();
+        DB::table('products')->truncate(); 
+        DB::table('categories')->truncate();
+        // DB::table('orders')->truncate(); // Bỏ comment nếu muốn xóa cả đơn hàng cũ
 
-        // 3. Dọn dẹp Cache hệ thống
+        // 3. Bật lại kiểm tra khóa ngoại
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+        // 4. Dọn dẹp Cache hệ thống
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         Artisan::call('view:clear');
         Artisan::call('route:clear');
 
-        // 4. Cập nhật Database
-        Artisan::call('migrate --force');
-
-        return "<h3>QUÉT DỌN THÀNH CÔNG!</h3>
-                <p>Giỏ hàng đã về 0 và số lượng sản phẩm đã reset về 20.</p>
-                <a href='/admin/dashboard' style='padding:10px; background:green; color:white; text-decoration:none;'>Quay lại Dashboard kiểm tra</a>";
+        return "<h3>HỆ THỐNG ĐÃ ĐƯỢC LÀM SẠCH TRỐNG TRƠN!</h3>
+                <p>Số lượng sản phẩm 1600 đã biến mất. Web bây giờ không còn sản phẩm mẫu.</p>
+                <p>Hiếu hãy vào trang Admin để tự thêm sản phẩm thật nhé.</p>
+                <a href='/admin/dashboard' style='padding:10px; background:blue; color:white; text-decoration:none;'>Quay lại Dashboard</a>";
     } catch (\Exception $e) {
         return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
     }
