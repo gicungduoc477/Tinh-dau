@@ -60,7 +60,7 @@ class ProductController extends Controller
             $this->saveProduct($product, $request);
             return redirect()->route('admin.product.index')->with('message', 'Thêm sản phẩm thành công!');
         } catch (\Exception $e) {
-            return redirect()->back()->withInput()->with('error', 'Lỗi: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Lỗi khi thêm: ' . $e->getMessage());
         }
     }
 
@@ -104,19 +104,21 @@ class ProductController extends Controller
     public function destroy($id) 
     {
         $product = Product::findOrFail($id);
-        // Tùy chọn: Xóa ảnh local nếu có
+        
+        // Xóa ảnh local nếu không phải link Cloudinary
         if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
             $oldPath = public_path($product->image);
             if (File::exists($oldPath)) {
                 File::delete($oldPath);
             }
         }
+        
         $product->delete();
         return redirect()->route('admin.product.index')->with('message', 'Đã xóa sản phẩm thành công!');
     }
 
     /**
-     * Hàm lưu dữ liệu chính
+     * Hàm lưu dữ liệu chính (Tối ưu cho cả Local và Production)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -127,13 +129,14 @@ class ProductController extends Controller
         $product->classification = $request->classification;
         $product->description = $request->description;
 
-        // Xử lý upload ảnh
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
-            
             $uploadedPath = null;
 
-            // Ưu tiên 1: Upload lên Cloudinary nếu có cấu hình (Dành cho Render)
-            if (env('CLOUDINARY_URL')) {
+            // Kiểm tra cấu hình Cloudinary (Ưu tiên số 1 trên Web)
+            // Lấy trực tiếp từ env hoặc config để đảm bảo nhận diện trên Render
+            $cloudinaryUrl = env('CLOUDINARY_URL');
+
+            if ($cloudinaryUrl) {
                 try {
                     $publicId = 'prod_' . time() . '_' . Str::random(5);
                     $result = Cloudinary::upload($request->file('image')->getRealPath(), [
@@ -146,12 +149,12 @@ class ProductController extends Controller
                 }
             }
 
-            // Ưu tiên 2: Nếu Cloudinary không chạy hoặc lỗi, lưu Local (Dành cho máy nhà)
+            // Ưu tiên 2: Nếu không có Cloudinary (Local), lưu vào public/uploads
             if (!$uploadedPath) {
                 $uploadedPath = $this->handleLocalUpload($request->file('image'));
             }
 
-            // Gán đường dẫn ảnh mới nếu upload thành công
+            // Nếu upload thành công (bằng bất cứ cách nào) thì mới gán vào model
             if ($uploadedPath) {
                 $product->image = $uploadedPath;
             }
@@ -162,7 +165,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Xử lý lưu ảnh vào thư mục Public của Server
+     * Xử lý lưu ảnh vào thư mục Public của Server (Dùng cho Local)
      */
     private function handleLocalUpload($file)
     {
@@ -173,7 +176,7 @@ class ProductController extends Controller
             $destinationPath = public_path('uploads/product');
             
             if (!File::isDirectory($destinationPath)) {
-                File::makeDirectory($destinationPath, 0777, true, true);
+                File::makeDirectory($destinationPath, 0755, true, true);
             }
 
             $file->move($destinationPath, $filename);
