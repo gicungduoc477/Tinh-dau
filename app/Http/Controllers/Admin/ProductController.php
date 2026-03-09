@@ -98,7 +98,8 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
 
         if ($product->image) {
-            $imagePath = public_path('uploads/product/' . $product->image);
+            // Sửa lại đường dẫn xóa ảnh cho chuẩn
+            $imagePath = public_path($product->image);
             if (File::exists($imagePath)) {
                 File::delete($imagePath);
             }
@@ -109,7 +110,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Hàm lưu dữ liệu dùng chung (Tối ưu cho Render)
+     * Hàm lưu dữ liệu dùng chung (Đã tối ưu quyền ghi file cho Render)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -121,32 +122,35 @@ class ProductController extends Controller
         $product->description = $request->description;
 
         if ($request->hasFile('image')) {
-            $uploadPath = public_path('uploads/product');
+            $folderPath = 'uploads/product';
+            $uploadPath = public_path($folderPath);
 
-            // Tự động tạo thư mục nếu Render chưa có
+            // Bước 1: Tạo thư mục nếu chưa có
             if (!File::isDirectory($uploadPath)) {
                 File::makeDirectory($uploadPath, 0777, true, true);
             }
+            
+            // Bước 2: Ép quyền ghi (Chmod) để vượt qua lỗi Permission trên Render
+            @chmod($uploadPath, 0777);
 
-            // Xóa ảnh cũ để tiết kiệm dung lượng server
+            // Bước 3: Xóa ảnh cũ (nếu có)
             if ($product->image) {
-                $oldPath = $uploadPath . '/' . $product->image;
+                $oldPath = public_path($product->image);
                 if (File::exists($oldPath)) {
                     File::delete($oldPath);
                 }
             }
 
-            // Xử lý file mới
+            // Bước 4: Xử lý file mới
             $file = $request->file('image');
             $extension = $file->getClientOriginalExtension();
-            // Đặt tên file: thời gian + tên đã slug (ví dụ: 1709123456_tinh-dau-buoi.jpg)
             $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $extension;
             
-            // Di chuyển file vào public/uploads/product
+            // Di chuyển file
             $file->move($uploadPath, $filename);
             
-            // Lưu TÊN FILE vào database (không lưu đường dẫn dài)
-            $product->image = $filename;
+            // Lưu đường dẫn vào DB (bao gồm cả thư mục để dễ hiển thị)
+            $product->image = $folderPath . '/' . $filename;
         }
 
         $product->slug = $this->createUniqueSlug($request->name, $product->id ?? 0);
