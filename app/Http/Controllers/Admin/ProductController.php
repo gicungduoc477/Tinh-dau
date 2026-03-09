@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File; 
 use Illuminate\Support\Str;
+// THÊM DÒNG NÀY ĐỂ DÙNG CLOUDINARY
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class ProductController extends Controller
 {
@@ -91,66 +92,39 @@ class ProductController extends Controller
     }
 
     /**
-     * 5. Xóa sản phẩm và ảnh đi kèm
+     * 5. Xóa sản phẩm
      */
     public function destroy($id) 
     {
         $product = Product::findOrFail($id);
 
-        if ($product->image) {
-            // Sửa lại đường dẫn xóa ảnh cho chuẩn
-            $imagePath = public_path($product->image);
-            if (File::exists($imagePath)) {
-                File::delete($imagePath);
-            }
-        }
-
+        // Lưu ý: Với Cloudinary, việc xóa ảnh cần Public ID. 
+        // Tạm thời xóa record trong DB, ảnh trên Cloud sẽ quản lý sau.
         $product->delete();
         return redirect()->route('admin.product.index')->with('message', 'Đã xóa sản phẩm thành công!');
     }
 
     /**
-     * Hàm lưu dữ liệu dùng chung (Đã tối ưu quyền ghi file cho Render)
+     * Hàm lưu dữ liệu (Sử dụng Cloudinary cho Render Free)
      */
     private function saveProduct(Product $product, Request $request)
     {
         $product->name = $request->name;
         $product->price = $request->price;
-        $product->stock = $request->stock ?? 0;
+        $product->stock = $request->stock ?? 0; // Luôn dùng 'stock' để tránh lỗi 'quantity'
         $product->category_id = $request->category_id;
         $product->classification = $request->classification;
         $product->description = $request->description;
 
         if ($request->hasFile('image')) {
-            $folderPath = 'uploads/product';
-            $uploadPath = public_path($folderPath);
-
-            // Bước 1: Tạo thư mục nếu chưa có
-            if (!File::isDirectory($uploadPath)) {
-                File::makeDirectory($uploadPath, 0777, true, true);
-            }
+            // Upload lên Cloudinary và lấy URL an toàn (https)
+            // Phương thức getSecurePath() trả về link https://res.cloudinary.com/...
+            $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
+                'folder' => 'tinh_dau_shop/products',
+            ])->getSecurePath();
             
-            // Bước 2: Ép quyền ghi (Chmod) để vượt qua lỗi Permission trên Render
-            @chmod($uploadPath, 0777);
-
-            // Bước 3: Xóa ảnh cũ (nếu có)
-            if ($product->image) {
-                $oldPath = public_path($product->image);
-                if (File::exists($oldPath)) {
-                    File::delete($oldPath);
-                }
-            }
-
-            // Bước 4: Xử lý file mới
-            $file = $request->file('image');
-            $extension = $file->getClientOriginalExtension();
-            $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $extension;
-            
-            // Di chuyển file
-            $file->move($uploadPath, $filename);
-            
-            // Lưu đường dẫn vào DB (bao gồm cả thư mục để dễ hiển thị)
-            $product->image = $folderPath . '/' . $filename;
+            // Lưu trực tiếp URL này vào cột image trong database
+            $product->image = $uploadedFileUrl;
         }
 
         $product->slug = $this->createUniqueSlug($request->name, $product->id ?? 0);
