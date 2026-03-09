@@ -107,7 +107,6 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         
-        // Chỉ xóa ảnh nếu là file cục bộ, không xóa link Cloudinary
         if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
             $oldPath = public_path($product->image);
             if (File::exists($oldPath)) {
@@ -120,7 +119,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Hàm lưu dữ liệu chính (Tối ưu cho cả Local và Production)
+     * Hàm lưu dữ liệu chính (Sử dụng storeOnCloudinary để ép Render phải chạy)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -133,24 +132,20 @@ class ProductController extends Controller
 
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $uploadedPath = null;
-
-            // Đọc cấu hình từ config thay vì env trực tiếp để tránh lỗi khi chạy artisan config:cache
             $cloudinaryUrl = config('cloudinary.cloud_url');
 
+            // Nếu có cấu hình Cloudinary (Render), dùng hàm storeOnCloudinary
             if ($cloudinaryUrl) {
                 try {
-                    $result = Cloudinary::upload($request->file('image')->getRealPath(), [
-                        'folder'    => 'tinh_dau_shop/products',
-                        'overwrite' => true,
-                        'resource_type' => 'auto'
-                    ]);
+                    // Cách này tự động xử lý file stream và đẩy thẳng lên folder mong muốn
+                    $result = $request->file('image')->storeOnCloudinary('tinh_dau_shop/products');
                     $uploadedPath = $result->getSecurePath();
                 } catch (\Exception $e) {
                     Log::error("Cloudinary Upload Error: " . $e->getMessage());
                 }
             }
 
-            // Nếu không có Cloudinary hoặc upload lỗi, lưu cục bộ (dành cho Local)
+            // Nếu không có Cloudinary hoặc lỗi, lưu Local (Dành cho môi trường phát triển)
             if (!$uploadedPath) {
                 $uploadedPath = $this->handleLocalUpload($request->file('image'));
             }

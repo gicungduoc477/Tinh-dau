@@ -12,6 +12,7 @@ return [
     |
     */
 
+    // Đây là biến quan trọng nhất cho Cloudinary trên môi trường Production (Render)
     'cloud_url' => env('CLOUDINARY_URL'),
 
     'cloud' => [
@@ -27,7 +28,7 @@ return [
         'use_filename' => true,
         'unique_filename' => true,
         'overwrite' => false,
-        'folder' => env('CLOUDINARY_FOLDER', 'tinh_dau_shop'), 
+        'folder' => env('CLOUDINARY_FOLDER', 'tinh_dau_shop/products'), 
     ],
 
     /*
