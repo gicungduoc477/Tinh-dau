@@ -65,44 +65,48 @@ class AuthenticatedSessionController extends Controller
 
     /**
      * Hàm phụ trợ: Gộp giỏ hàng session vào DB
-     * Đã cập nhật để fix lỗi Data truncated column 'product_id'
+     * Đã tối ưu hóa bằng pull() để chống trùng lặp dữ liệu
      */
     protected function mergeCartAfterLogin()
     {
-        $sessionCart = session('cart', []);
+        // Lấy dữ liệu giỏ hàng ra và xóa luôn khỏi session trong 1 bước
+        $sessionCart = session()->pull('cart', []);
         
-        if (!empty($sessionCart)) {
-            foreach ($sessionCart as $key => $details) {
-                // XỬ LÝ FIX LỖI: Nếu key là "23_subscription", lấy ra con số 23
-                $cleanProductId = $key;
-                if (is_string($key) && str_contains($key, '_')) {
-                    $cleanProductId = explode('_', $key)[0];
-                }
-
-                // Chuyển ID về kiểu int để đảm bảo an toàn DB
-                $cleanProductId = (int)$cleanProductId;
-
-                // Kiểm tra xem trong DB của user này đã có sản phẩm đó chưa
-                $cartItem = Cart::where('user_id', Auth::id())
-                                ->where('product_id', $cleanProductId)
-                                ->first();
-
-                if ($cartItem) {
-                    // Nếu đã có, cộng dồn số lượng
-                    $cartItem->increment('quantity', $details['quantity']);
-                } else {
-                    // Nếu chưa có, tạo mới bản ghi trong DB
-                    Cart::create([
-                        'user_id'    => Auth::id(),
-                        'product_id' => $cleanProductId,
-                        'quantity'   => $details['quantity'],
-                        'price'      => $details['price']
-                    ]);
-                }
-            }
-            // Sau khi gộp xong, xóa sạch giỏ hàng trong session
-            session()->forget('cart');
+        if (empty($sessionCart)) {
+            return;
         }
+
+        foreach ($sessionCart as $key => $details) {
+            // XỬ LÝ FIX LỖI: Lấy Product ID sạch
+            $cleanProductId = $key;
+            if (is_string($key) && str_contains($key, '_')) {
+                $cleanProductId = explode('_', $key)[0];
+            }
+
+            $cleanProductId = (int)$cleanProductId;
+            if ($cleanProductId <= 0) continue;
+
+            // Tìm sản phẩm hiện có trong DB của User
+            $cartItem = Cart::where('user_id', Auth::id())
+                            ->where('product_id', $cleanProductId)
+                            ->first();
+
+            if ($cartItem) {
+                // Nếu đã có, cộng dồn số lượng một cách an toàn
+                $cartItem->increment('quantity', (int)($details['quantity'] ?? 1));
+            } else {
+                // Nếu chưa có, tạo mới
+                Cart::create([
+                    'user_id'    => Auth::id(),
+                    'product_id' => $cleanProductId,
+                    'quantity'   => (int)($details['quantity'] ?? 1),
+                    'price'      => $details['price'] ?? 0
+                ]);
+            }
+        }
+
+        // Đảm bảo session được lưu lại ngay lập tức
+        session()->save();
     }
 
     /**
