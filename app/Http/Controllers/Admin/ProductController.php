@@ -117,14 +117,19 @@ class ProductController extends Controller
         $product->description = $request->description;
 
         if ($request->hasFile('image')) {
-            // Upload lên Cloudinary và lấy URL an toàn (https)
-            // Phương thức getSecurePath() trả về link https://res.cloudinary.com/...
-            $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
-                'folder' => 'tinh_dau_shop/products',
-            ])->getSecurePath();
-            
-            // Lưu trực tiếp URL này vào cột image trong database
-            $product->image = $uploadedFileUrl;
+            // Defensive check: Only attempt to upload if Cloudinary is configured.
+            // This prevents crashes in environments where credentials are not set.
+            if (config('cloudinary.cloud_url')) {
+                // Upload to Cloudinary and get the secure URL
+                $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
+                    'folder' => 'tinh_dau_shop/products',
+                ])->getSecurePath();
+                
+                // Save the URL directly to the image column in the database
+                $product->image = $uploadedFileUrl;
+            }
+            // If Cloudinary is not configured, the image upload is silently skipped.
+            // The product is still updated, but the image is not.
         }
 
         $product->slug = $this->createUniqueSlug($request->name, $product->id ?? 0);
