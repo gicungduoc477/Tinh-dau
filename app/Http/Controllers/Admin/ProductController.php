@@ -114,27 +114,26 @@ class ProductController extends Controller
         $product->description = $request->description;
 
         if ($request->hasFile('image')) {
-            // Kiểm tra xem có cấu hình Cloudinary không hoặc đang ở Production (Render)
-            if (env('CLOUDINARY_URL') || app()->environment('production')) {
+            // Only attempt to upload to Cloudinary if the URL is configured
+            if (env('CLOUDINARY_URL')) {
                 try {
+                    // Attempt to upload the image to Cloudinary
                     $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
                         'folder' => 'tinh_dau_shop/products',
                     ])->getSecurePath();
                     
+                    // On success, update the product's image URL
                     $product->image = $uploadedFileUrl;
+
                 } catch (\Exception $e) {
-                    Log::error("Cloudinary Error: " . $e->getMessage());
-                    
-                    // Nếu ở Local (máy nhà) mà Cloudinary lỗi thì mới dùng Local
-                    if (app()->environment('local')) {
-                        $this->saveLocalImage($product, $request);
-                    } else {
-                        // Nếu đang ở Render mà lỗi Cloudinary, dừng lại báo lỗi để check cấu hình Environment
-                        throw new \Exception("Lỗi cấu hình Cloudinary trên Render: " . $e->getMessage());
-                    }
+                    // IMPORTANT: If the upload fails (e.g., invalid credentials in CLOUDINARY_URL),
+                    // log the specific error and continue without crashing.
+                    // The image will simply not be updated.
+                    Log::error("Cloudinary upload failed: " . $e->getMessage());
                 }
             } 
-            else {
+            // Fallback for local development if CLOUDINARY_URL is not set
+            elseif (app()->environment('local')) {
                 $this->saveLocalImage($product, $request);
             }
         }
