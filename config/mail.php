@@ -8,7 +8,7 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    // Ưu tiên SMTP, nếu không có biến môi trường thì ép dùng smtp thay vì log
+    // Ép dùng smtp làm mặc định nếu trên Render chưa nhận biến MAIL_MAILER
     'default' => env('MAIL_MAILER', 'smtp'),
 
     /*
@@ -23,16 +23,17 @@ return [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),
             'url' => env('MAIL_URL'),
-            // Ép cấu hình Gmail nếu Render không đọc được biến env
+            // Điền thẳng smtp.gmail.com làm phương án dự phòng (fallback)
             'host' => env('MAIL_HOST', 'smtp.gmail.com'),
+            // Điền thẳng cổng 465 để tránh bị dùng nhầm cổng 2525
             'port' => env('MAIL_PORT', 465), 
-            'username' => env('MAIL_USERNAME'),
-            'password' => env('MAIL_PASSWORD'),
+            'username' => env('MAIL_USERNAME', 'vanhieubui403@gmail.com'),
+            'password' => env('MAIL_PASSWORD', 'cyssexhzcbatfpyl'),
+            'encryption' => env('MAIL_ENCRYPTION', 'ssl'),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
-        // Các mailer khác giữ nguyên...
         'ses' => ['transport' => 'ses'],
         'postmark' => ['transport' => 'postmark'],
         'resend' => ['transport' => 'resend'],
@@ -59,7 +60,6 @@ return [
     */
 
     'from' => [
-        // Sửa email gửi đi mặc định để Gmail không chặn
         'address' => env('MAIL_FROM_ADDRESS', 'vanhieubui403@gmail.com'),
         'name' => env('MAIL_FROM_NAME', 'Nature Shop'),
     ],

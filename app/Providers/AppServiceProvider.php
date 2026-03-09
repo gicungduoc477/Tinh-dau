@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Artisan;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,13 +26,20 @@ class AppServiceProvider extends ServiceProvider
         Paginator::useBootstrapFive();
 
         // 2. ÉP DÙNG HTTPS KHI CHẠY TRÊN RENDER
-        // Giúp sửa lỗi "The information you’re about to submit is not secure" khi đăng nhập
         if (config('app.env') !== 'local') {
             URL::forceScheme('https');
+
+            // 3. TỰ ĐỘNG XÓA CACHE CẤU HÌNH (Dành cho Render bản Free)
+            // Giúp Laravel nhận đúng cấu hình Mail Port 465 và Driver SMTP
+            try {
+                Artisan::call('config:clear');
+                Artisan::call('cache:clear');
+            } catch (\Exception $e) {
+                // Bỏ qua nếu có lỗi trong quá trình xóa cache
+            }
         }
 
-        // 3. ÉP NẠP CẤU HÌNH CLOUDINARY
-        // Giúp sửa lỗi "Trying to access array offset on null" khi upload ảnh
+        // 4. ÉP NẠP CẤU HÌNH CLOUDINARY
         config([
             'cloudinary.cloud_url' => env('CLOUDINARY_URL')
         ]);
