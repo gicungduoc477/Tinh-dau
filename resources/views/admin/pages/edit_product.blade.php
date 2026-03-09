@@ -16,6 +16,7 @@
             <h6 class="m-0 font-weight-bold text-primary">Thông tin chi tiết: <span class="text-dark">{{ $product->name }}</span></h6>
         </div>
         <div class="card-body">
+            {{-- Hiển thị thông báo lỗi nếu có --}}
             @if ($errors->any())
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     <ul class="mb-0">
@@ -82,13 +83,27 @@
 
                     <div class="col-md-4 border-left">
                         <div class="form-group">
-                            <label class="font-weight-bold text-primary">Ảnh sản phẩm</label>
+                            <label class="font-weight-bold text-primary">Ảnh sản phẩm hiện tại</label>
                             
                             <div class="text-center p-3 border rounded bg-light mb-3" style="min-height: 250px; display: flex; align-items: center; justify-content: center;">
+                                @php
+                                    // Logic xử lý đường dẫn ảnh thông minh
+                                    $currentImageUrl = asset('backend/img/no-image.png');
+                                    if ($product->image) {
+                                        if (filter_var($product->image, FILTER_VALIDATE_URL)) {
+                                            // Nếu là link Cloudinary thì dùng trực tiếp và thêm timestamp để tránh cache
+                                            $currentImageUrl = $product->image . '?v=' . time();
+                                        } else {
+                                            // Nếu là ảnh local, dọn dẹp đường dẫn để tránh bị lặp 'uploads/product/'
+                                            $cleanPath = str_replace(['public/', 'uploads/product/'], '', $product->image);
+                                            $currentImageUrl = asset('uploads/product/' . $cleanPath) . '?v=' . time();
+                                        }
+                                    }
+                                @endphp
                                 <img id="previewEdit" 
-                                     src="{{ $product->image ? asset('uploads/product/'.$product->image) : asset('backend/img/no-image.png') }}" 
+                                     src="{{ $currentImageUrl }}" 
                                      style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px;"
-                                     onerror="this.src='{{ asset('backend/img/no-image.png') }}'">
+                                     onerror="this.onerror=null;this.src='{{ asset('backend/img/no-image.png') }}'">
                             </div>
 
                             <div class="custom-file">
@@ -121,13 +136,16 @@
         imgInput.addEventListener('change', function(e) {
             const [file] = this.files;
             if (file) {
-                // 1. Cập nhật ảnh xem trước ngay lập tức
-                preview.src = URL.createObjectURL(file);
-                
-                // 2. Hiện tên file lên thanh input
-                let fileName = file.name;
+                // Hiển thị tên file lên nhãn
                 let label = this.nextElementSibling;
-                label.innerText = fileName;
+                label.innerText = file.name;
+
+                // Cập nhật ảnh xem trước (Preview)
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
             }
         });
     });

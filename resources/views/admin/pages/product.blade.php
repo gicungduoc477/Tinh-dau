@@ -66,13 +66,10 @@
 
                                         if ($imagePath) {
                                             if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-                                                // Nếu là link Cloudinary (có http/https)
-                                                $finalUrl = $imagePath;
+                                                $finalUrl = $imagePath . '?v=' . time();
                                             } else {
-                                                // Nếu là ảnh Local (máy nhà Laragon)
-                                                // Xử lý sạch đường dẫn để tránh bị lặp 'uploads/product'
                                                 $cleanPath = str_replace(['public/', 'uploads/product/'], '', $imagePath);
-                                                $finalUrl = asset('uploads/product/' . $cleanPath);
+                                                $finalUrl = asset('uploads/product/' . $cleanPath) . '?v=' . time();
                                             }
                                         }
                                     @endphp
@@ -91,13 +88,13 @@
                             <td class="align-middle"><small class="text-muted">{{ $pro->classification ?? '-' }}</small></td>
                             <td class="align-middle text-center">
                                 <div class="d-flex justify-content-center">
-                                    <a href="{{ route('admin.product.edit', $pro->id) }}" class="btn btn-warning btn-sm shadow-sm mr-2" title="Sửa">
+                                    <a href="{{ route('admin.product.edit', $pro->id) }}" class="btn btn-warning btn-sm shadow-sm mr-2">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <form action="{{ route('admin.product.destroy', $pro->id) }}" method="POST" onsubmit="return confirm('Bạn có chắc muốn xóa sản phẩm này?')">
+                                    <form action="{{ route('admin.product.destroy', $pro->id) }}" method="POST" onsubmit="return confirm('Xóa sản phẩm này?')">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="btn btn-danger btn-sm shadow-sm" title="Xóa">
+                                        <button type="submit" class="btn btn-danger btn-sm shadow-sm">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </form>
@@ -105,12 +102,7 @@
                             </td>
                         </tr>
                         @empty
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-5">
-                                <i class="fas fa-box-open fa-3x mb-3 d-block"></i>
-                                Không tìm thấy sản phẩm nào.
-                            </td>
-                        </tr>
+                        <tr><td colspan="7" class="text-center py-5">Trống</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -122,46 +114,42 @@
     </div>
 </div>
 
-{{-- Modal Thêm Sản Phẩm --}}
+{{-- Modal Thêm Sản Phẩm - Quan trọng nhất là enctype --}}
 <div class="modal fade" id="addProductModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <form action="{{ route('admin.product.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
-            <div class="modal-content border-0 shadow-lg">
+            <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title font-weight-bold">Thêm sản phẩm mới</h5>
-                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <h5 class="modal-title">Thêm sản phẩm mới</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
                 </div>
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-8">
                             <div class="form-group">
-                                <label class="font-weight-bold text-dark">Tên sản phẩm <span class="text-danger">*</span></label>
-                                <input type="text" name="name" class="form-control" placeholder="Ví dụ: Tinh dầu Bưởi nguyên chất" required>
+                                <label>Tên sản phẩm <span class="text-danger">*</span></label>
+                                <input type="text" name="name" class="form-control" required>
                             </div>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Giá bán (VNĐ)</label>
-                                        <input type="number" name="price" class="form-control" placeholder="0" required min="0">
+                                        <label>Giá bán</label>
+                                        <input type="number" name="price" class="form-control" required min="0">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Số lượng kho</label>
-                                        <input type="number" name="stock" class="form-control" value="1" min="0">
+                                        <label>Kho</label>
+                                        <input type="number" name="stock" class="form-control" value="1">
                                     </div>
                                 </div>
                             </div>
-
-                            <div class="row mt-2">
+                            <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Danh mục</label>
-                                        <select name="category_id" class="form-control shadow-sm">
-                                            <option value="">-- Chọn danh mục --</option>
+                                        <label>Danh mục</label>
+                                        <select name="category_id" class="form-control">
                                             @foreach($categories as $cat)
                                                 <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                                             @endforeach
@@ -170,12 +158,10 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Phân loại</label>
-                                        <select name="classification" class="form-control shadow-sm">
-                                            <option value="">-- Không chọn --</option>
+                                        <label>Phân loại</label>
+                                        <select name="classification" class="form-control">
                                             <option value="Tinh dầu nguyên chất">Tinh dầu nguyên chất</option>
                                             <option value="Hương liệu pha">Hương liệu pha</option>
-                                            <option value="Tinh dầu hỗn hợp (Blend Oil)">Tinh dầu hỗn hợp (Blend Oil)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -183,29 +169,27 @@
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label class="font-weight-bold text-dark">Ảnh sản phẩm</label>
+                                <label>Ảnh sản phẩm</label>
                                 <div class="custom-file">
                                     <input type="file" name="image" class="custom-file-input" id="imgInputModal" accept="image/*">
-                                    <label class="custom-file-label" for="imgInputModal">Chọn file...</label>
+                                    <label class="custom-file-label">Chọn file...</label>
                                 </div>
-                                <div class="mt-3 text-center border p-2 rounded bg-light shadow-inner">
-                                    <img id="previewModal" src="{{ asset('backend/img/no-image.png') }}" 
-                                         style="max-width: 100%; height: 150px; object-fit: contain;">
+                                <div class="mt-3 text-center border p-2">
+                                    <img id="previewModal" src="{{ asset('backend/img/no-image.png') }}" style="max-width: 100%; height: 150px; object-fit: contain;">
                                 </div>
-                                <small class="form-text text-muted text-center mt-2">Dung lượng tối đa 2MB.</small>
                             </div>
                         </div>
                         <div class="col-md-12">
                             <div class="form-group">
-                                <label class="font-weight-bold text-dark">Mô tả sản phẩm</label>
-                                <textarea name="description" class="form-control" rows="3" placeholder="Mô tả ngắn về sản phẩm..."></textarea>
+                                <label>Mô tả</label>
+                                <textarea name="description" class="form-control" rows="3"></textarea>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer bg-light">
+                <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Hủy</button>
-                    <button type="submit" class="btn btn-primary px-4 shadow">Lưu sản phẩm</button>
+                    <button type="submit" class="btn btn-primary">Lưu sản phẩm</button>
                 </div>
             </div>
         </form>
@@ -213,17 +197,12 @@
 </div>
 
 <script>
-    // Xử lý Preview ảnh khi chọn file trong Modal
     document.getElementById('imgInputModal')?.addEventListener('change', function(e) {
         const file = this.files[0];
         if (file) {
-            let label = this.nextElementSibling;
-            label.innerText = file.name;
-            
+            this.nextElementSibling.innerText = file.name;
             const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('previewModal').setAttribute('src', e.target.result);
-            }
+            reader.onload = (e) => document.getElementById('previewModal').src = e.target.result;
             reader.readAsDataURL(file);
         }
     });

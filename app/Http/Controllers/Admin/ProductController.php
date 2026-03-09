@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\File;
 
 class ProductController extends Controller
 {
@@ -54,10 +55,13 @@ class ProductController extends Controller
             'image'          => 'nullable|image|mimes:jpeg,png,jpg,gif,jfif|max:2048',
         ]);
 
-        $product = new Product();
-        $this->saveProduct($product, $request);
-
-        return redirect()->route('admin.product.index')->with('message', 'Thêm sản phẩm thành công!');
+        try {
+            $product = new Product();
+            $this->saveProduct($product, $request);
+            return redirect()->route('admin.product.index')->with('message', 'Thêm sản phẩm thành công!');
+        } catch (\Exception $e) {
+            return redirect()->back()->withInput()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -86,9 +90,12 @@ class ProductController extends Controller
             'image'          => 'nullable|image|mimes:jpeg,png,jpg,gif,jfif|max:2048',
         ]);
 
-        $this->saveProduct($product, $request);
-
-        return redirect()->route('admin.product.index')->with('message', 'Cập nhật sản phẩm thành công!');
+        try {
+            $this->saveProduct($product, $request);
+            return redirect()->route('admin.product.index')->with('message', 'Cập nhật sản phẩm thành công!');
+        } catch (\Exception $e) {
+            return redirect()->back()->withInput()->with('error', 'Lỗi cập nhật: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -97,12 +104,19 @@ class ProductController extends Controller
     public function destroy($id) 
     {
         $product = Product::findOrFail($id);
+        // Tùy chọn: Xóa ảnh local nếu có
+        if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
+            $oldPath = public_path($product->image);
+            if (File::exists($oldPath)) {
+                File::delete($oldPath);
+            }
+        }
         $product->delete();
         return redirect()->route('admin.product.index')->with('message', 'Đã xóa sản phẩm thành công!');
     }
 
     /**
-     * Hàm lưu dữ liệu (Ép buộc Cloudinary trên Render)
+     * Hàm lưu dữ liệu chính
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -113,28 +127,33 @@ class ProductController extends Controller
         $product->classification = $request->classification;
         $product->description = $request->description;
 
-        if ($request->hasFile('image')) {
-            // Only attempt to upload to Cloudinary if the URL is configured
+        // Xử lý upload ảnh
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            
+            $uploadedPath = null;
+
+            // Ưu tiên 1: Upload lên Cloudinary nếu có cấu hình (Dành cho Render)
             if (env('CLOUDINARY_URL')) {
                 try {
-                    // Attempt to upload the image to Cloudinary
-                    $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
-                        'folder' => 'tinh_dau_shop/products',
-                    ])->getSecurePath();
-                    
-                    // On success, update the product's image URL
-                    $product->image = $uploadedFileUrl;
-
+                    $publicId = 'prod_' . time() . '_' . Str::random(5);
+                    $result = Cloudinary::upload($request->file('image')->getRealPath(), [
+                        'folder'    => 'tinh_dau_shop/products',
+                        'public_id' => $publicId,
+                    ]);
+                    $uploadedPath = $result->getSecurePath();
                 } catch (\Exception $e) {
-                    // IMPORTANT: If the upload fails (e.g., invalid credentials in CLOUDINARY_URL),
-                    // log the specific error and continue without crashing.
-                    // The image will simply not be updated.
-                    Log::error("Cloudinary upload failed: " . $e->getMessage());
+                    Log::error("Cloudinary Upload Error: " . $e->getMessage());
                 }
-            } 
-            // Fallback for local development if CLOUDINARY_URL is not set
-            elseif (app()->environment('local')) {
-                $this->saveLocalImage($product, $request);
+            }
+
+            // Ưu tiên 2: Nếu Cloudinary không chạy hoặc lỗi, lưu Local (Dành cho máy nhà)
+            if (!$uploadedPath) {
+                $uploadedPath = $this->handleLocalUpload($request->file('image'));
+            }
+
+            // Gán đường dẫn ảnh mới nếu upload thành công
+            if ($uploadedPath) {
+                $product->image = $uploadedPath;
             }
         }
 
@@ -143,23 +162,25 @@ class ProductController extends Controller
     }
 
     /**
-     * Lưu ảnh local (Chỉ dành cho máy nhà Laragon)
+     * Xử lý lưu ảnh vào thư mục Public của Server
      */
-    private function saveLocalImage(Product $product, Request $request)
+    private function handleLocalUpload($file)
     {
         try {
-            $file = $request->file('image');
-            $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
+            $extension = strtolower($file->getClientOriginalExtension());
+            $filename = time() . '_' . Str::random(8) . '.' . $extension;
             
-            $path = public_path('uploads/product');
-            if (!file_exists($path)) {
-                mkdir($path, 0777, true);
+            $destinationPath = public_path('uploads/product');
+            
+            if (!File::isDirectory($destinationPath)) {
+                File::makeDirectory($destinationPath, 0777, true, true);
             }
 
-            $file->move($path, $filename);
-            $product->image = 'uploads/product/' . $filename;
+            $file->move($destinationPath, $filename);
+            return 'uploads/product/' . $filename;
         } catch (\Exception $e) {
             Log::error("Local Upload Error: " . $e->getMessage());
+            return null;
         }
     }
 
