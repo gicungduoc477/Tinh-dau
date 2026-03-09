@@ -5,7 +5,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Order;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB; // Thêm DB Facade
+use Illuminate\Support\Facades\DB;
 
 // Admin Controllers
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -17,7 +17,7 @@ use App\Http\Controllers\Admin\ReviewController as AdminReviewController;
 
 // Frontend Controllers
 use App\Http\Controllers\Frontend\ProductController as FrontendProductController;
-use App\Http\Controllers\Frontend\CartController as FrontendCartController;
+use App\Http\Controllers\Frontend\FrontendCartController as FrontendCartController;
 use App\Http\Controllers\Frontend\CheckoutController as FrontendCheckoutController;
 use App\Http\Controllers\Frontend\OrderController as FrontendOrderController;
 use App\Http\Controllers\Frontend\ReviewController as FrontendReviewController;
@@ -190,39 +190,38 @@ Route::controller(PaymentController::class)->group(function () {
 });
 
 /**
- * HỆ THỐNG XÓA SẠCH DỮ LIỆU RÁC (Dành cho Hiếu)
- * Route này sẽ đưa Database về trạng thái trống trơn hoàn toàn.
+ * HỆ THỐNG FIX LỖI TRIỆT ĐỂ (Xóa sạch rác & Cấp quyền ảnh)
  */
 Route::get('/fix-system', function () {
     try {
-        // 1. Tắt kiểm tra khóa ngoại để xóa tận gốc
+        // 1. Cấp quyền ghi file & Liên kết Storage (Fix lỗi upload ảnh)
+        Artisan::call('storage:link');
+
+        // 2. Xóa sạch dữ liệu cũ (Dùng delete từng bảng để lách luật TiDB)
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-
-        // 2. LỆNH QUAN TRỌNG: TRUNCATE xóa sạch dữ liệu và reset ID về 1
-        DB::table('carts')->truncate();
-        DB::table('products')->truncate(); 
-        DB::table('categories')->truncate();
-        // DB::table('orders')->truncate(); // Bỏ comment nếu muốn xóa cả đơn hàng cũ
-
-        // 3. Bật lại kiểm tra khóa ngoại
+        DB::table('carts')->delete();
+        DB::table('order_items')->delete();
+        DB::table('orders')->delete();
+        DB::table('products')->delete();
+        DB::table('categories')->delete();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        // 4. Dọn dẹp Cache hệ thống
+        // 3. Dọn dẹp Cache hệ thống
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         Artisan::call('view:clear');
         Artisan::call('route:clear');
 
-        return "<h3>HỆ THỐNG ĐÃ ĐƯỢC LÀM SẠCH TRỐNG TRƠN!</h3>
-                <p>Số lượng sản phẩm 1600 đã biến mất. Web bây giờ không còn sản phẩm mẫu.</p>
-                <p>Hiếu hãy vào trang Admin để tự thêm sản phẩm thật nhé.</p>
-                <a href='/admin/dashboard' style='padding:10px; background:blue; color:white; text-decoration:none;'>Quay lại Dashboard</a>";
+        return "<h3>FIX LỖI THÀNH CÔNG!</h3>
+                <p>1. Đã cấp quyền upload ảnh vào Storage.</p>
+                <p>2. Đã xóa sạch 1600 sản phẩm rác (Database hiện tại trống).</p>
+                <a href='/admin/product/create' style='padding:10px; background:green; color:white; text-decoration:none;'>THỬ THÊM SẢN PHẨM NGAY</a>";
     } catch (\Exception $e) {
         return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
     }
 });
 
-// Preview Mail (Dev only)
+// Preview Mail
 Route::get('/dev/mail-preview', function () {
     $user = User::first() ?? new User(['name' => 'Khách Hàng', 'email' => 'demo@example.com']);
     return new WelcomeUserMail($user);
