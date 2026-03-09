@@ -8,7 +8,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Laravel sẽ ưu tiên lấy giá trị MAIL_MAILER từ file .env.
-    | Trên Render, hãy đảm bảo đặt MAIL_MAILER=sendinblue
+    | Môi trường Local: MAIL_MAILER=smtp
+    | Môi trường Render: MAIL_MAILER=brevo
     |
     */
 
@@ -33,9 +34,9 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],
 
-        // Cấu hình Brevo API (Đã cập nhật transport thành 'brevo')
-        'sendinblue' => [
-            'transport' => 'brevo', 
+        // Đã đổi tên từ 'sendinblue' thành 'brevo' để khớp với AppServiceProvider
+        'brevo' => [
+            'transport' => 'brevo',
         ],
 
         'log' => [
