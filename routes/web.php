@@ -32,7 +32,7 @@ use App\Mail\WelcomeUserMail;
 
 /*
 |--------------------------------------------------------------------------
-| 1. FRONTEND ROUTES (Công khai cho khách)
+| 1. FRONTEND ROUTES
 |--------------------------------------------------------------------------
 */
 Route::get('/', [FrontendProductController::class, 'index'])->name('home');
@@ -54,14 +54,11 @@ Route::controller(FrontendCartController::class)->name('cart.')->group(function 
 
 Route::controller(FrontendCheckoutController::class)->group(function () {
     Route::get('/checkout', 'show')->name('checkout');
-    Route::post('/checkout', 'place')->name('checkout.place'); // Route xử lý đặt hàng
+    // CẢ COD VÀ CHUYỂN KHOẢN ĐỀU GỬI VỀ ĐÂY ĐỂ LƯU ĐƠN HÀNG TRƯỚC
+    Route::post('/checkout', 'place')->name('checkout.place'); 
     Route::get('/checkout/success', 'success')->name('checkout.success');
 });
 
-/**
- * Đưa route xem chi tiết đơn hàng ra ngoài middleware 'auth' 
- * Để hỗ trợ khách vãng lai xem đơn qua session('guest_order_id')
- */
 Route::get('/orders/{id}', [FrontendOrderController::class, 'show'])->name('orders.show');
 
 /*
@@ -85,7 +82,7 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 3. AUTH REQUIRED ROUTES (Phải đăng nhập)
+| 3. AUTH REQUIRED ROUTES
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
@@ -100,7 +97,6 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(FrontendOrderController::class)->prefix('orders')->name('orders.')->group(function () {
         Route::get('/', 'index')->name('index');
-        // Lưu ý: route {id} (show) đã được đưa ra ngoài để khách vãng lai cũng dùng được
         Route::post('/{id}/cancel', 'cancel')->name('cancel'); 
         Route::post('/{id}/return', 'requestReturn')->name('requestReturn');
     });
@@ -182,11 +178,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 5. THANH TOÁN PAYOS
+| 5. THANH TOÁN (PAYOS / VIETQR)
 |--------------------------------------------------------------------------
 */
+// Nếu bạn dùng VietQR như hướng dẫn của mình, Route này sẽ là quan trọng nhất:
+Route::post('/payment/create', [FrontendCheckoutController::class, 'place'])->name('payment.create');
+
 Route::controller(PaymentController::class)->group(function () {
-    Route::post('/payment/create', 'createPaymentLink')->name('payment.create');
     Route::get('/payment/success', 'paymentSuccess')->name('payment.success');
     Route::get('/payment/cancel', 'paymentCancel')->name('payment.cancel');
     Route::post('/payment/webhook', 'handleWebhook')->name('payment.webhook');
