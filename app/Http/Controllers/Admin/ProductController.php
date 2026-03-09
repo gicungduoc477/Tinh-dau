@@ -102,7 +102,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Hàm lưu dữ liệu (Tối ưu cho cả Local và Cloudinary)
+     * Hàm lưu dữ liệu (Ép buộc Cloudinary trên Render)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -114,8 +114,8 @@ class ProductController extends Controller
         $product->description = $request->description;
 
         if ($request->hasFile('image')) {
-            // ƯU TIÊN 1: Sử dụng Cloudinary nếu có cấu hình (Dành cho Render)
-            if (config('cloudinary.cloud_url') || env('CLOUDINARY_URL')) {
+            // Kiểm tra xem có cấu hình Cloudinary không hoặc đang ở Production (Render)
+            if (env('CLOUDINARY_URL') || app()->environment('production')) {
                 try {
                     $uploadedFileUrl = Cloudinary::upload($request->file('image')->getRealPath(), [
                         'folder' => 'tinh_dau_shop/products',
@@ -124,11 +124,16 @@ class ProductController extends Controller
                     $product->image = $uploadedFileUrl;
                 } catch (\Exception $e) {
                     Log::error("Cloudinary Error: " . $e->getMessage());
-                    // Fallback sang local nếu Cloudinary lỗi
-                    $this->saveLocalImage($product, $request);
+                    
+                    // Nếu ở Local (máy nhà) mà Cloudinary lỗi thì mới dùng Local
+                    if (app()->environment('local')) {
+                        $this->saveLocalImage($product, $request);
+                    } else {
+                        // Nếu đang ở Render mà lỗi Cloudinary, dừng lại báo lỗi để check cấu hình Environment
+                        throw new \Exception("Lỗi cấu hình Cloudinary trên Render: " . $e->getMessage());
+                    }
                 }
             } 
-            // ƯU TIÊN 2: Lưu Local nếu không có Cloudinary (Dành cho Laragon)
             else {
                 $this->saveLocalImage($product, $request);
             }
@@ -139,23 +144,24 @@ class ProductController extends Controller
     }
 
     /**
-     * Hỗ trợ lưu ảnh vào thư mục public/uploads/product
+     * Lưu ảnh local (Chỉ dành cho máy nhà Laragon)
      */
     private function saveLocalImage(Product $product, Request $request)
     {
-        $file = $request->file('image');
-        $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
-        
-        // Đảm bảo thư mục tồn tại
-        $path = public_path('uploads/product');
-        if (!file_exists($path)) {
-            mkdir($path, 0777, true);
-        }
+        try {
+            $file = $request->file('image');
+            $filename = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
+            
+            $path = public_path('uploads/product');
+            if (!file_exists($path)) {
+                mkdir($path, 0777, true);
+            }
 
-        $file->move($path, $filename);
-        
-        // Chỉ lưu đường dẫn tương đối để asset() ở View hoạt động đúng
-        $product->image = 'uploads/product/' . $filename;
+            $file->move($path, $filename);
+            $product->image = 'uploads/product/' . $filename;
+        } catch (\Exception $e) {
+            Log::error("Local Upload Error: " . $e->getMessage());
+        }
     }
 
     private function createUniqueSlug($name, $id = 0)
