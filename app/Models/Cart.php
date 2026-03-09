@@ -16,12 +16,11 @@ class Cart extends Model
         'product_id',
         'quantity',
         'price',
-        'purchase_mode' // BẮT BUỘC thêm dòng này để lưu chế độ mua (once/subscription)
+        'purchase_mode' // Lưu chế độ mua: once hoặc subscription
     ];
 
     /**
      * Mối quan hệ với Product.
-     * Dùng withDefault để tránh lỗi sập trang nếu sản phẩm bị xóa khỏi hệ thống.
      */
     public function product()
     {
@@ -41,8 +40,7 @@ class Cart extends Model
     }
 
     /**
-     * Tính tổng tiền của dòng sản phẩm này.
-     * Có thể gọi trong code qua: $cartItem->total_price
+     * Accessor tính tổng tiền: $cartItem->total_price
      */
     public function getTotalPriceAttribute()
     {

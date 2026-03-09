@@ -65,11 +65,11 @@ class AuthenticatedSessionController extends Controller
 
     /**
      * Hàm phụ trợ: Gộp giỏ hàng session vào DB
-     * Đã tối ưu hóa bằng pull() để chống trùng lặp dữ liệu
+     * Đã tối ưu hóa bằng pull() và bổ sung purchase_mode
      */
     protected function mergeCartAfterLogin()
     {
-        // Lấy dữ liệu giỏ hàng ra và xóa luôn khỏi session trong 1 bước
+        // Lấy dữ liệu giỏ hàng ra và xóa luôn khỏi session trong 1 bước để tránh trùng lặp
         $sessionCart = session()->pull('cart', []);
         
         if (empty($sessionCart)) {
@@ -77,7 +77,7 @@ class AuthenticatedSessionController extends Controller
         }
 
         foreach ($sessionCart as $key => $details) {
-            // XỬ LÝ FIX LỖI: Lấy Product ID sạch
+            // XỬ LÝ FIX LỖI: Lấy Product ID sạch từ key (ví dụ: "23_subscription" -> 23)
             $cleanProductId = $key;
             if (is_string($key) && str_contains($key, '_')) {
                 $cleanProductId = explode('_', $key)[0];
@@ -86,9 +86,13 @@ class AuthenticatedSessionController extends Controller
             $cleanProductId = (int)$cleanProductId;
             if ($cleanProductId <= 0) continue;
 
-            // Tìm sản phẩm hiện có trong DB của User
+            // Lấy purchase_mode từ session, mặc định là 'once' nếu không có
+            $purchaseMode = $details['purchase_mode'] ?? 'once';
+
+            // Tìm sản phẩm hiện có trong DB của User (khớp cả ID và chế độ mua)
             $cartItem = Cart::where('user_id', Auth::id())
                             ->where('product_id', $cleanProductId)
+                            ->where('purchase_mode', $purchaseMode)
                             ->first();
 
             if ($cartItem) {
@@ -97,15 +101,16 @@ class AuthenticatedSessionController extends Controller
             } else {
                 // Nếu chưa có, tạo mới
                 Cart::create([
-                    'user_id'    => Auth::id(),
-                    'product_id' => $cleanProductId,
-                    'quantity'   => (int)($details['quantity'] ?? 1),
-                    'price'      => $details['price'] ?? 0
+                    'user_id'       => Auth::id(),
+                    'product_id'    => $cleanProductId,
+                    'quantity'      => (int)($details['quantity'] ?? 1),
+                    'price'         => $details['price'] ?? 0,
+                    'purchase_mode' => $purchaseMode
                 ]);
             }
         }
 
-        // Đảm bảo session được lưu lại ngay lập tức
+        // Ép Laravel lưu lại trạng thái session ngay lập tức
         session()->save();
     }
 
