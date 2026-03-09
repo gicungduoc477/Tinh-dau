@@ -5,7 +5,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Order;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB; // Thêm DB Facade
+use Illuminate\Support\Facades\DB;
 
 // Admin Controllers
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -34,7 +34,7 @@ use App\Mail\WelcomeUserMail;
 
 /*
 |--------------------------------------------------------------------------
-| 1. FRONTEND ROUTES
+| 1. FRONTEND ROUTES (Trang khách hàng)
 |--------------------------------------------------------------------------
 */
 Route::get('/', [FrontendProductController::class, 'index'])->name('home');
@@ -47,7 +47,8 @@ Route::controller(FrontendProductController::class)->group(function () {
     Route::get('/search', 'search')->name('products.search');
 });
 
-Route::controller(FrontendCartController::class)->name('cart.')->group(function () {
+// Sửa lại group để không bị báo đỏ trong VS Code
+Route::group(['as' => 'cart.', 'controller' => FrontendCartController::class], function () {
     Route::get('/cart', 'index')->name('index');
     Route::post('/cart/add', 'add')->name('add');
     Route::post('/cart/update', 'update')->name('update');
@@ -64,7 +65,7 @@ Route::get('/orders/{id}', [FrontendOrderController::class, 'show'])->name('orde
 
 /*
 |--------------------------------------------------------------------------
-| 2. USER AUTHENTICATION
+| 2. USER AUTHENTICATION (Đăng nhập/Đăng ký)
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest')->group(function () {
@@ -83,20 +84,20 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 3. AUTH REQUIRED ROUTES
+| 3. AUTH REQUIRED ROUTES (Phải đăng nhập)
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     
-    Route::controller(ProfileController::class)->prefix('profile')->name('profile.')->group(function () {
+    Route::group(['prefix' => 'profile', 'as' => 'profile.', 'controller' => ProfileController::class], function () {
         Route::get('/', 'edit')->name('index');   
         Route::get('/edit', 'edit')->name('edit'); 
         Route::patch('/', 'update')->name('update');
         Route::delete('/', 'destroy')->name('destroy');
     });
 
-    Route::controller(FrontendOrderController::class)->prefix('orders')->name('orders.')->group(function () {
+    Route::group(['prefix' => 'orders', 'as' => 'orders.', 'controller' => FrontendOrderController::class], function () {
         Route::get('/', 'index')->name('index');
         Route::post('/{id}/cancel', 'cancel')->name('cancel'); 
         Route::post('/{id}/return', 'requestReturn')->name('requestReturn');
@@ -111,7 +112,7 @@ Route::middleware('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 4. ADMIN ROUTES
+| 4. ADMIN ROUTES (Trang quản trị)
 |--------------------------------------------------------------------------
 */
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -155,7 +156,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('product', AdminProductController::class);
         Route::resource('users', AdminUserController::class);
 
-        Route::controller(AdminOrderController::class)->prefix('orders')->name('orders.')->group(function () {
+        Route::group(['prefix' => 'orders', 'as' => 'orders.', 'controller' => AdminOrderController::class], function () {
             Route::get('/', 'index')->name('index');
             Route::get('/refunds', 'refundList')->name('refunds'); 
             Route::get('/{id}', 'show')->name('show');
@@ -163,8 +164,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', 'destroy')->name('destroy'); 
         });
 
-        Route::controller(AdminReviewController::class)->prefix('reviews')->name('reviews.')->group(function () {
-            Route::get('/', 'index')->name('index');
+        Route::group(['prefix' => 'reviews', 'as' => 'reviews.', 'controller' => AdminReviewController::class], function () {
+            Route::get('/index', 'index')->name('index');
             Route::post('/{id}/toggle', 'toggle')->name('toggle'); 
             Route::post('/{id}/reply', 'reply')->name('reply'); 
             Route::put('/{id}/reply', 'updateReply')->name('update_reply'); 
@@ -179,7 +180,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 5. THANH TOÁN PAYOS & TOOLS
+| 5. THANH TOÁN & TOOLS
 |--------------------------------------------------------------------------
 */
 Route::controller(PaymentController::class)->group(function () {
@@ -191,35 +192,32 @@ Route::controller(PaymentController::class)->group(function () {
 
 /**
  * HỆ THỐNG FIX LỖI TỰ ĐỘNG (Dành cho Hiếu)
- * Route này sẽ dọn dẹp Database Online cho giống Local
  */
 Route::get('/fix-system', function () {
     try {
-        // 1. Xóa sạch bảng giỏ hàng (Hết số 1580 rác)
+        // 1. Dọn sạch giỏ hàng rác
         DB::table('carts')->delete(); 
 
-        // 2. Reset số lượng sản phẩm tồn kho về 20 (giống Local của Hiếu)
-        // Lưu ý: Cột này trong bảng products của bạn là 'quantity' hay 'stock' thì sửa lại cho đúng nhé
-        DB::table('products')->update(['quantity' => 20]);
+        // 2. Reset tồn kho (Sửa quantity thành stock cho đúng database của Hiếu)
+        DB::table('products')->update(['stock' => 20]);
 
-        // 3. Dọn dẹp Cache hệ thống
+        // 3. Làm mới Cache (Bỏ qua symlink để không bị lỗi Permission)
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         Artisan::call('view:clear');
         Artisan::call('route:clear');
 
-        // 4. Cập nhật Database
-        Artisan::call('migrate --force');
-
-        return "<h3>QUÉT DỌN THÀNH CÔNG!</h3>
-                <p>Giỏ hàng đã về 0 và số lượng sản phẩm đã reset về 20.</p>
-                <a href='/admin/dashboard' style='padding:10px; background:green; color:white; text-decoration:none;'>Quay lại Dashboard kiểm tra</a>";
+        return "<h3>FIX HỆ THỐNG THÀNH CÔNG!</h3>
+                <p>1. Giỏ hàng đã về 0.</p>
+                <p>2. Tồn kho sản phẩm đã reset về 20.</p>
+                <p>3. Đã làm mới toàn bộ Cache.</p>
+                <a href='/admin/dashboard' style='padding:10px; background:blue; color:white; text-decoration:none; border-radius:5px;'>VỀ DASHBOARD</a>";
     } catch (\Exception $e) {
         return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
     }
 });
 
-// Preview Mail (Dev only)
+// Preview Mail
 Route::get('/dev/mail-preview', function () {
     $user = User::first() ?? new User(['name' => 'Khách Hàng', 'email' => 'demo@example.com']);
     return new WelcomeUserMail($user);
