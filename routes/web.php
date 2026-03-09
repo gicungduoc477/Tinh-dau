@@ -189,17 +189,26 @@ Route::controller(PaymentController::class)->group(function () {
 });
 
 /**
- * 6. HỆ THỐNG FIX LỖI TỰ ĐỘNG CHO RENDER (Dành cho Hiếu)
- * Truy cập: your-site.onrender.com/fix-system
+ * HỆ THỐNG FIX LỖI TỰ ĐỘNG (Dành cho Hiếu)
+ * Xóa sạch giỏ hàng lỗi và làm mới hệ thống
  */
 Route::get('/fix-system', function () {
     try {
+        // 1. LỆNH QUAN TRỌNG: Xóa sạch bảng giỏ hàng để reset số 1560 về 0
+        \Illuminate\Support\Facades\DB::table('carts')->delete(); 
+
+        // 2. Dọn dẹp Cache hệ thống
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         Artisan::call('view:clear');
         Artisan::call('route:clear');
+
+        // 3. Cập nhật Database (nếu có thay đổi mới)
         Artisan::call('migrate --force');
-        return "<h3>Thành công!</h3><p>Đã dọn dẹp cache và cập nhật Database thành công.</p><a href='/'>Quay lại trang chủ</a>";
+
+        return "<h3>ĐÃ QUÉT SẠCH RÁC THÀNH CÔNG!</h3>
+                <p>Bảng giỏ hàng đã về 0. Con số 1560 đã bị xóa.</p>
+                <a href='/admin/dashboard' style='padding:10px; background:green; color:white; text-decoration:none;'>Quay lại Dashboard kiểm tra</a>";
     } catch (\Exception $e) {
         return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
     }
