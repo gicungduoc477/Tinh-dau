@@ -2,23 +2,19 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-// Đảm bảo 2 dòng này có mặt để Laravel tìm thấy class
 use App\Models\Product;
 use App\Models\Category;
+use Illuminate\Support\Str;
 
 class ProductSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // 1. Tạo hoặc lấy Category (Dùng class Category đã import)
+        // 1. Tạo hoặc lấy Category
         $category = Category::firstOrCreate(
-            ['name' => 'Tinh dầu thiên nhiên'], 
-            ['slug' => 'tinh-dau-thien-nhien']
+            ['slug' => 'tinh-dau-thien-nhien'],
+            ['name' => 'Tinh dầu thiên nhiên']
         );
 
         // 2. Danh sách sản phẩm
@@ -45,16 +41,11 @@ class ProductSeeder extends Seeder
             ['Sả Hoa Hồng', 'tinh-dau-sa-hoa-hong', 165000],
         ];
 
-        // 3. Vòng lặp tạo sản phẩm
+        // Link ảnh mẫu tinh dầu (Bạn có thể thay bằng link Cloudinary của bạn nếu muốn)
+        $sampleImage = 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=500';
+
         foreach ($products as $p) {
-            $baseSlug = $p[1];
-            $slug = $baseSlug;
-            $i = 1;
-            
-            // Kiểm tra trùng slug (Dùng class Product đã import)
-            while (Product::where('slug', $slug)->exists()) {
-                $slug = $baseSlug . '-' . $i++;
-            }
+            $slug = $p[1];
 
             Product::updateOrCreate(
                 ['slug' => $slug], 
@@ -64,7 +55,9 @@ class ProductSeeder extends Seeder
                     'description' => 'Tinh dầu nguyên chất 100% tự nhiên giúp thư giãn và tốt cho sức khỏe.',
                     'category_id' => $category->id,
                     'stock' => rand(10, 50),
-                    'slug' => $slug,
+                    'classification' => 'Tinh dầu nguyên chất',
+                    // Nếu sản phẩm đã có ảnh rồi thì không ghi đè link mẫu, nếu chưa có thì gán link mẫu
+                    'image' => Product::where('slug', $slug)->first()?->image ?? $sampleImage,
                 ]
             );
         }

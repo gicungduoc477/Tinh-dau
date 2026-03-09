@@ -16,7 +16,7 @@
             <h6 class="m-0 font-weight-bold text-primary">Thông tin chi tiết: <span class="text-dark">{{ $product->name }}</span></h6>
         </div>
         <div class="card-body">
-            {{-- Hiển thị thông báo lỗi nếu có --}}
+            {{-- Hiển thị thông báo lỗi --}}
             @if ($errors->any())
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     <ul class="mb-0">
@@ -30,6 +30,7 @@
                 </div>
             @endif
 
+            {{-- Form Cập nhật - Quan trọng: phải có enctype --}}
             <form action="{{ route('admin.product.update', $product->id) }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 @method('PUT')
@@ -81,36 +82,37 @@
                         </div>
                     </div>
 
+                    {{-- Phần hiển thị và thay đổi ảnh --}}
                     <div class="col-md-4 border-left">
                         <div class="form-group">
-                            <label class="font-weight-bold text-primary">Ảnh sản phẩm hiện tại</label>
+                            <label class="font-weight-bold text-primary">Ảnh sản phẩm</label>
                             
-                            <div class="text-center p-3 border rounded bg-light mb-3" style="min-height: 250px; display: flex; align-items: center; justify-content: center;">
+                            <div class="text-center p-3 border rounded bg-light mb-3" style="min-height: 250px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                                 @php
-                                    // Logic xử lý đường dẫn ảnh thông minh
-                                    $currentImageUrl = asset('backend/img/no-image.png');
+                                    // Logic hiển thị ảnh linh hoạt
                                     if ($product->image) {
-                                        if (filter_var($product->image, FILTER_VALIDATE_URL)) {
-                                            // Nếu là link Cloudinary thì dùng trực tiếp và thêm timestamp để tránh cache
-                                            $currentImageUrl = $product->image . '?v=' . time();
+                                        if (Str::startsWith($product->image, 'http')) {
+                                            $displayUrl = $product->image;
                                         } else {
-                                            // Nếu là ảnh local, dọn dẹp đường dẫn để tránh bị lặp 'uploads/product/'
-                                            $cleanPath = str_replace(['public/', 'uploads/product/'], '', $product->image);
-                                            $currentImageUrl = asset('uploads/product/' . $cleanPath) . '?v=' . time();
+                                            $displayUrl = asset($product->image);
                                         }
+                                    } else {
+                                        $displayUrl = asset('backend/img/no-image.png');
                                     }
                                 @endphp
                                 <img id="previewEdit" 
-                                     src="{{ $currentImageUrl }}" 
+                                     src="{{ $displayUrl }}" 
                                      style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px;"
                                      onerror="this.onerror=null;this.src='{{ asset('backend/img/no-image.png') }}'">
                             </div>
 
                             <div class="custom-file">
                                 <input type="file" name="image" class="custom-file-input" id="imgInputEdit" accept="image/*">
-                                <label class="custom-file-label text-truncate" for="imgInputEdit">Thay đổi ảnh...</label>
+                                <label class="custom-file-label text-truncate" for="imgInputEdit">Chọn ảnh mới từ máy...</label>
                             </div>
-                            <small class="form-text text-muted mt-2 text-center italic text-danger">Lưu ý: Chỉ chọn ảnh nếu bạn muốn thay đổi ảnh cũ.</small>
+                            <small class="form-text text-muted mt-2">
+                                <i class="fas fa-info-circle mr-1"></i> Để trống nếu giữ nguyên ảnh cũ.
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -120,7 +122,7 @@
                 <div class="form-group d-flex justify-content-end mb-0">
                     <a href="{{ route('admin.product.index') }}" class="btn btn-light mr-2 border">Hủy bỏ</a>
                     <button type="submit" class="btn btn-primary px-5 shadow">
-                        <i class="fas fa-save mr-1"></i> Cập nhật ngay
+                        <i class="fas fa-save mr-1"></i> Lưu thay đổi
                     </button>
                 </div>
             </form>
@@ -128,22 +130,23 @@
     </div>
 </div>
 
+{{-- Script để Preview ảnh ngay khi chọn file --}}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const imgInput = document.getElementById('imgInputEdit');
         const preview = document.getElementById('previewEdit');
+        const label = document.querySelector('.custom-file-label');
 
         imgInput.addEventListener('change', function(e) {
-            const [file] = this.files;
+            const file = this.files[0];
             if (file) {
-                // Hiển thị tên file lên nhãn
-                let label = this.nextElementSibling;
+                // Hiển thị tên file lên label
                 label.innerText = file.name;
 
-                // Cập nhật ảnh xem trước (Preview)
+                // Tạo URL tạm thời để xem trước ảnh
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
+                reader.onload = function(event) {
+                    preview.src = event.target.result;
                 }
                 reader.readAsDataURL(file);
             }
