@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Order;
+use Illuminate\Support\Facades\Artisan; // Thêm Facade Artisan
 
 // Admin Controllers
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -54,14 +55,10 @@ Route::controller(FrontendCartController::class)->name('cart.')->group(function 
 
 Route::controller(FrontendCheckoutController::class)->group(function () {
     Route::get('/checkout', 'show')->name('checkout');
-    Route::post('/checkout', 'place')->name('checkout.place'); // Route xử lý đặt hàng
+    Route::post('/checkout', 'place')->name('checkout.place');
     Route::get('/checkout/success', 'success')->name('checkout.success');
 });
 
-/**
- * Đưa route xem chi tiết đơn hàng ra ngoài middleware 'auth' 
- * Để hỗ trợ khách vãng lai xem đơn qua session('guest_order_id')
- */
 Route::get('/orders/{id}', [FrontendOrderController::class, 'show'])->name('orders.show');
 
 /*
@@ -100,7 +97,6 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(FrontendOrderController::class)->prefix('orders')->name('orders.')->group(function () {
         Route::get('/', 'index')->name('index');
-        // Lưu ý: route {id} (show) đã được đưa ra ngoài để khách vãng lai cũng dùng được
         Route::post('/{id}/cancel', 'cancel')->name('cancel'); 
         Route::post('/{id}/return', 'requestReturn')->name('requestReturn');
     });
@@ -182,7 +178,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 5. THANH TOÁN PAYOS
+| 5. THANH TOÁN PAYOS & TOOLS
 |--------------------------------------------------------------------------
 */
 Route::controller(PaymentController::class)->group(function () {
@@ -190,6 +186,23 @@ Route::controller(PaymentController::class)->group(function () {
     Route::get('/payment/success', 'paymentSuccess')->name('payment.success');
     Route::get('/payment/cancel', 'paymentCancel')->name('payment.cancel');
     Route::post('/payment/webhook', 'handleWebhook')->name('payment.webhook');
+});
+
+/**
+ * 6. HỆ THỐNG FIX LỖI TỰ ĐỘNG CHO RENDER (Dành cho Hiếu)
+ * Truy cập: your-site.onrender.com/fix-system
+ */
+Route::get('/fix-system', function () {
+    try {
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+        Artisan::call('view:clear');
+        Artisan::call('route:clear');
+        Artisan::call('migrate --force');
+        return "<h3>Thành công!</h3><p>Đã dọn dẹp cache và cập nhật Database thành công.</p><a href='/'>Quay lại trang chủ</a>";
+    } catch (\Exception $e) {
+        return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
+    }
 });
 
 // Preview Mail (Dev only)
