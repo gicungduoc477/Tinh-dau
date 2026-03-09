@@ -271,7 +271,7 @@
                     <h5 class="mb-0 fw-bold">Kết quả: <span class="text-primary">{{ $products->total() }}</span> sản phẩm</h5>
                 </div>
 
-                <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-4">
                     @forelse($products as $product)
                     <div class="col wow animate__animated animate__fadeInUp" data-wow-delay="0.1s">
                         <div class="card product-card h-100 shadow-sm">

@@ -163,11 +163,11 @@
 
                         <div class="purchase-box shadow-sm">
                             <div class="row g-3 align-items-end">
-                                <div class="col-4">
+                                <div class="col-12 col-sm-4">
                                     <label class="qty-label small fw-bold text-uppercase text-muted">Số lượng</label>
                                     <input type="number" name="quantity" value="1" min="1" class="form-control qty-input shadow-none">
                                 </div>
-                                <div class="col-8">
+                                <div class="col-12 col-sm-8">
                                     <button type="submit" id="btn-submit-cart" class="btn btn-buy">
                                         <i class="bi bi-cart-plus-fill"></i> Thêm vào giỏ hàng
                                     </button>
