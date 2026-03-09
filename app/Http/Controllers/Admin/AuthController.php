@@ -7,6 +7,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+// --- CÁC DÒNG KHAI BÁO ĐỂ CHẠY MAIL VÀ LOG ---
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use App\Mail\WelcomeUserMail;
+// -------------------------------------------
 
 class AuthController extends Controller
 {
@@ -92,6 +97,15 @@ class AuthController extends Controller
             'role' => 'admin', 
         ]);
 
+        // --- BẮT ĐẦU LOGIC GỬI MAIL ---
+        try {
+            Mail::to($user->email)->send(new WelcomeUserMail($user));
+        } catch (\Exception $e) {
+            // Dòng này sẽ không còn báo đỏ sau khi thêm 'use Log' ở đầu file
+            Log::error("Lỗi gửi mail đăng ký Admin: " . $e->getMessage());
+        }
+        // --- KẾT THÚC LOGIC GỬI MAIL ---
+
         Auth::login($user);
 
         return redirect()->route('admin.dashboard')->with('message', 'Tạo tài khoản quản trị thành công.');
@@ -99,20 +113,13 @@ class AuthController extends Controller
 
     /**
      * Đăng xuất Admin và chuyển hướng về trang chủ Website
-     * Cập nhật để sửa lỗi 419 Page Expired
      */
     public function logout(Request $request)
     {
-        // 1. Thực hiện đăng xuất tài khoản
         Auth::logout();
-
-        // 2. Hủy phiên làm việc hiện tại để đảm bảo an toàn
         $request->session()->invalidate();
-
-        // 3. Làm mới CSRF Token để tránh lỗi 419 khi quay lại
         $request->session()->regenerateToken();
         
-        // 4. Chuyển hướng về trang chủ (Route 'home') thay vì trang login admin
         return redirect()->route('home')->with('message', 'Đã đăng xuất khỏi hệ thống quản trị.');
     }
 }
