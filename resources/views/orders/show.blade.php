@@ -51,7 +51,7 @@
                                 <p class="fw-bold">{{ $order->return_reason }}</p>
                                 @if($order->return_image)
                                     <div class="mt-2">
-                                        <img src="{{ asset('storage/' . $order->return_image) }}" class="rounded shadow-sm" style="max-width: 100px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#imagePreviewModal">
+                                        <img src="{{ Storage::url($order->return_image) }}" class="rounded shadow-sm" style="max-width: 100px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#imagePreviewModal">
                                     </div>
                                 @endif
                             </div>
@@ -92,7 +92,7 @@
                                     <td class="ps-0 border-0">
                                         <div class="d-flex align-items-center">
                                             @if($it->product && $it->product->image)
-                                                <img src="{{ asset('uploads/product/' . $it->product->image) }}" class="rounded me-3" style="width: 50px; height: 50px; object-fit: cover;">
+                                                <img src="{{ $it->product->image_url }}" class="rounded me-3" style="width: 50px; height: 50px; object-fit: cover;">
                                             @else
                                                 <div class="bg-light rounded me-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;"><i class="bi bi-image text-muted"></i></div>
                                             @endif
@@ -226,7 +226,7 @@
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 bg-transparent">
             <div class="modal-body p-0 text-center">
-                <img src="{{ asset('storage/' . $order->return_image) }}" class="img-fluid rounded shadow">
+                <img src="{{ Storage::url($order->return_image) }}" class="img-fluid rounded shadow">
             </div>
         </div>
     </div>

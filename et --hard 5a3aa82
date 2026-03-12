@@ -1,0 +1,59 @@
+[33mac8553b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Clean up local images and truncate products
+[33m4d2622c[m fix ảnh
+[33m5a3aa82[m cloudinary
+[33mf728509[m sửa function
+[33mb3d6ee1[m fff
+[33m46628ba[m fff
+[33m3d203a1[m fff
+[33m5d881d9[m fix
+[33mea195fd[m fix ảnh'
+[33ma3fc578[m fix
+[33meb7425f[m fix lỗi sửa ảnh
+[33m675cd36[m fix loi 74
+[33mca631fe[m fix loi 74
+[33mca84bda[m fix loi 7
+[33m0044aed[m fix loi
+[33m246c636[m fix lỗi
+[33medf484a[m fix lỗi
+[33m6ac965e[m fix lỗi '
+[33mf78a197[m fix edit product
+[33mc39db42[m Final sync and fix column stock
+[33m2020665[m fix thêm sanr phẩm
+[33mc388be0[m fix thêm sanr phẩm
+[33me72a52f[m xóa sản hết phẩm
+[33m9ffc6a9[m Force fix database quantity and carts
+[33m1595b69[m Update fix-system to clear carts table
+[33m15f3ec7[m Fix lỗi cộng dồn giỏ hàng và thêm route fix-system
+[33mc39bedf[m Add fix-system route
+[33m02570d3[m Chuyển session driver sang database
+[33mad6695e[m Final fix: Sync mailer name and driver to brevo
+[33m093f466[m Update mail transport to brevo and install brevo-mailer
+[33m1ac87d3[m Cấu hình Brevo API để gửi mail trên Render
+[33m96f97ae[m Fix tren mobile trang cart
+[33mff6eb04[m Fix tren mobile trang cart
+[33m323947a[m Fix tren mobile trang cart
+[33m075d450[m Fix tren mobile trang cart
+[33meab4252[m Fix tren mobile trang cart
+[33m5edb6fa[m Fix tren mobile trang cart
+[33m6b46942[m Fix giao diện fontend trang cart
+[33m188a18d[m Fix giao diện fontend
+[33mc689675[m Fix 502 error and mail delivery
+[33m063d533[m Final fix: Force clear cache and update mail config
+[33m057f9d7[m Force SMTP config and fix mail logic
+[33m3a30c24[m Fix logic gui mail va log error
+[33md563cb4[m Fix logic gui mail và import class
+[33mbe8c4c4[m Doi ten Model order thanh Order de fix loi tren Render
+[33mf1b8b9d[m Bo sung anh giao dien mac dinh
+[33m8649b3a[m Cap nhat config mail va app url
+[33md8ee46c[m Fix login logic and cart merge
+[33m57c9007[m Fix: Force HTTPS and keep Cloudinary config
+[33m90ea75d[m FIX: Force case-sensitive folder name for Models
+[33me1db4f4[m FIX: Force capitalize Models folder and update autoload
+[33ma2478c1[m Fix: Force rename models to Models for Linux compatibility
+[33m1020aca[m Fix: Add use App\Models statements in ProductSeeder
+[33m9934d12[m Fix: move migrate before cache clear
+[33mb47441e[m Update Dockerfile: add clear cache and db seed
+[33m5c2a3f7[m Fix: Install composer and vendors in Docker
+[33m76b8589[m Auto migrate on startup
+[33m2b5625f[m Fix: thêm RUN cho lệnh sed trong Dockerfile
+[33m325fae9[m Deploy to Render - Version 1.0

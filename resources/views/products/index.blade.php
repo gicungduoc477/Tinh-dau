@@ -271,7 +271,7 @@
                     <h5 class="mb-0 fw-bold">Kết quả: <span class="text-primary">{{ $products->total() }}</span> sản phẩm</h5>
                 </div>
 
-                <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-4">
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-4">
                     @forelse($products as $product)
                     <div class="col wow animate__animated animate__fadeInUp" data-wow-delay="0.1s">
                         <div class="card product-card h-100 shadow-sm">
@@ -280,8 +280,20 @@
                             </span>
                             <div class="img-wrapper">
                                 <a href="{{ route('products.show', $product->slug) }}">
-                                    @php $imagePath = 'uploads/product/' . $product->image; @endphp
-                                    <img src="{{ (!empty($product->image) && file_exists(public_path($imagePath))) ? asset($imagePath) : asset('backend/img/no-image.png') }}" alt="{{ $product->name }}">
+                                    @php
+                                        if ($product->image) {
+                                            if (Illuminate\Support\Str::startsWith($product->image, 'http')) {
+                                                $displayUrl = $product->image;
+                                            } else {
+                                                $displayUrl = asset($product->image);
+                                            }
+                                        } else {
+                                            $displayUrl = asset('backend/img/no-image.png');
+                                        }
+                                    @endphp
+                                    <img src="{{ $displayUrl }}" 
+                                         alt="{{ $product->name }}"
+                                         onerror="this.onerror=null;this.src='{{ asset('backend/img/no-image.png') }}'">
                                 </a>
                             </div>
                             <div class="card-body p-4 pt-2">
