@@ -11,70 +11,122 @@ class Review extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 
-        'product_id', 
-        'rating', 
-        'comment', 
-        'image', 
-        'image_list', 
-        'video',
-        'tags',
-        'reply',      
-        'reply_at',   
-        'first_reply_at',
-        'admin_note',
-        'is_resolved',
-        'status'
+        'user_id', 'product_id', 'rating', 'comment', 
+        'image', 'image_list', 'video', 'tags',
+        'reply', 'reply_at', 'first_reply_at',
+        'admin_note', 'is_resolved', 'status'
     ];
 
     protected $casts = [
         'reply_at' => 'datetime',
         'first_reply_at' => 'datetime',
         'image_list' => 'array',
-        'tags' => 'array',
+        'tags' => 'array', 
         'is_resolved' => 'boolean',
     ];
 
-    // Trả về trạng thái xử lý dựa trên cột is_resolved
-    public function getIsResolvedStatusAttribute()
+    /**
+     * Tự động gộp Tags và Comment khi hiển thị.
+     * Sử dụng: $review->full_comment
+     */
+    public function getFullCommentAttribute()
     {
-        return $this->is_resolved ? 'Đã xử lý' : 'Chờ phản hồi';
-    }
+        $allContent = [];
 
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
+        // 1. Lấy các tags (câu trả lời nhanh)
+        if (!empty($this->tags) && is_array($this->tags)) {
+            $allContent[] = implode(', ', $this->tags);
+        }
 
-    public function product()
-    {
-        return $this->belongsTo(Product::class);
+        // 2. Lấy nội dung comment
+        if (!empty($this->comment)) {
+            $allContent[] = $this->comment;
+        }
+
+        return count($allContent) > 0 ? implode(' - ', $allContent) : 'Khách hàng không để lại bình luận';
     }
 
     /**
-     * Accessor: URL ảnh chính
+     * Xử lý URL Hình ảnh (Hỗ trợ cả Cloudinary URL và Local Storage)
+     * Sử dụng: $review->image_url
      */
     public function getImageUrlAttribute()
     {
         if (!$this->image) return asset('images/no-image.png');
-        if (filter_var($this->image, FILTER_VALIDATE_URL)) return $this->image;
+
+        // Nếu là URL từ Cloudinary hoặc bên ngoài
+        if (filter_var($this->image, FILTER_VALIDATE_URL)) {
+            return $this->image;
+        }
+
+        // Nếu là file lưu local trong storage/public
         return Storage::disk('public')->exists($this->image) 
             ? Storage::url($this->image) 
             : asset('images/no-image.png');
     }
 
     /**
-     * Accessor: URL Video
+     * Xử lý URL Video (Hỗ trợ cả Cloudinary URL và Local Storage)
+     * Sử dụng: $review->video_url
      */
     public function getVideoUrlAttribute()
     {
         if (!$this->video) return null;
-        if (filter_var($this->video, FILTER_VALIDATE_URL)) return $this->video;
-        return Storage::url($this->video);
+
+        // Nếu là URL từ Cloudinary
+        if (filter_var($this->video, FILTER_VALIDATE_URL)) {
+            return $this->video;
+        }
+
+        // Nếu là file lưu local
+        return Storage::disk('public')->exists($this->video) 
+            ? Storage::url($this->video) 
+            : null;
     }
 
-    public function scopeActive($query)
+    /**
+     * Kiểm tra xem review này có video hay không
+     */
+    public function hasVideo()
     {
-        return $query->where('status', 'active');
+        return !empty($this->video);
+    }
+
+    /**
+     * Lấy trạng thái xử lý bằng văn bản
+     */
+    public function getIsResolvedStatusAttribute()
+    {
+        return $this->is_resolved ? 'Đã phản hồi' : 'Chờ xử lý';
+    }
+
+    /* --- Relationships --- */
+
+    public function user() 
+    { 
+        return $this->belongsTo(User::class); 
+    }
+
+    public function product() 
+    { 
+        return $this->belongsTo(Product::class); 
+    }
+
+    /* --- Scopes --- */
+
+    /**
+     * Chỉ lấy các đánh giá đang hiển thị (active)
+     */
+    public function scopeActive($query) 
+    { 
+        return $query->where('status', 'active'); 
+    }
+
+    /**
+     * Lấy các đánh giá có kèm hình ảnh hoặc video
+     */
+    public function scopeHasMedia($query)
+    {
+        return $query->whereNotNull('image')->orWhereNotNull('video');
     }
 }

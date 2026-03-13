@@ -49,8 +49,28 @@
             <h2 class="fw-bold text-center mb-4">Đánh giá sản phẩm</h2>
             
             <div class="product-preview d-flex align-items-center mb-4">
-                <img src="{{ asset('uploads/product/' . $product->image) }}" 
-                     class="rounded-3 me-3" style="width: 100px; height: 100px; object-fit: cover; border: 2px solid #fff;">
+                {{-- Logic FIX lỗi hiện ảnh --}}
+                @php
+                    $pImg = trim($product->image ?? '');
+                    if (filter_var($pImg, FILTER_VALIDATE_URL)) {
+                        $displayUrl = $pImg;
+                    } elseif (!empty($pImg) && !str_contains($pImg, '/')) {
+                        // Nếu là tên file thô, ưu tiên tìm trong uploads/product/
+                        $displayUrl = asset('uploads/product/' . $pImg);
+                    } elseif (!empty($pImg)) {
+                        // Nếu có đường dẫn /storage/... hoặc đường dẫn tương đối khác
+                        $displayUrl = asset(ltrim($pImg, '/'));
+                    } else {
+                        $displayUrl = asset('backend/img/no-image.png');
+                    }
+                @endphp
+
+                <img src="{{ $displayUrl }}" 
+                     alt="{{ $product->name }}"
+                     class="rounded-3 me-3 shadow-sm" 
+                     style="width: 100px; height: 100px; object-fit: cover; border: 2px solid #fff;"
+                     onerror="this.onerror=null; this.src='{{ asset('backend/img/no-image.png') }}';">
+
                 <div>
                     <h5 class="fw-bold mb-1">{{ $product->name }}</h5>
                     <p class="text-muted small mb-0"><i class="bi bi-tag-fill me-1"></i> Phân loại: {{ $product->classification ?? 'Mặc định' }}</p>
@@ -96,7 +116,7 @@
                 {{-- Upload Media (Ảnh/Video) --}}
                 <div class="mb-4">
                     <label class="fw-bold mb-2">Ảnh hoặc Video thực tế:</label>
-                    <div class="media-upload-wrapper" onclick="document.getElementById('media-input').click()">
+                    <div class="media-upload-wrapper" id="drop-zone" onclick="document.getElementById('media-input').click()">
                         <div id="upload-placeholder">
                             <i class="bi bi-camera-reels-fill fs-1 text-muted"></i>
                             <p class="mb-0 text-muted fw-bold">Thêm hình ảnh hoặc video</p>
@@ -106,7 +126,7 @@
                         <div id="preview-container">
                             <img id="image-preview" src="#">
                             <video id="video-preview" controls></video>
-                            <div id="remove-media" class="mt-2 text-danger small fw-bold" style="cursor: pointer;">
+                            <div id="remove-media" class="mt-3 text-danger small fw-bold" style="cursor: pointer;">
                                 <i class="bi bi-trash3-fill"></i> Xóa và chọn lại
                             </div>
                         </div>
@@ -168,6 +188,7 @@
         previewContainer.style.display = 'none';
         uploadPlaceholder.style.display = 'flex';
         videoPreview.src = "";
+        imagePreview.src = "#";
     });
 
     reviewForm.addEventListener('submit', function() {

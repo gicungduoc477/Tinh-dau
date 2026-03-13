@@ -10,11 +10,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 
 // Import các Mail Class
 use App\Mail\OrderPlacedMail;
 use App\Mail\OrderShippingMail;
 use App\Mail\OrderRefundedMail;
+use App\Mail\OrderDeliveredMail; 
 
 class OrderController extends Controller
 {
@@ -49,23 +51,22 @@ class OrderController extends Controller
     }
 
     /**
-     * Danh sách chờ hoàn tiền (ĐÃ CẬP NHẬT ĐIỀU KIỆN LỌC)
+     * Danh sách chờ hoàn tiền (Refund List)
+     * CẬP NHẬT: Lấy thêm trạng thái 'returning_confirmed' để hiển thị sau khi Admin bấm Đồng ý
      */
     public function refundList()
     {
-        // 1. Lấy đơn có trạng thái đang trả hàng hoặc chờ hoàn tiền
-        // 2. Phải là đơn đã thanh toán online (payment_status = paid)
-        $orders = Order::whereIn('status', ['returning', 'refunding', 'returned'])
+        $targetStatuses = ['returning_confirmed', 'returning', 'refunding', 'returned'];
+
+        $orders = Order::whereIn('status', $targetStatuses)
                     ->where('payment_status', 'paid') 
                     ->latest()
                     ->paginate(15);
 
-        // Tính tổng tiền cần hoàn hiển thị trên widget
-        $totalRefundAmount = Order::whereIn('status', ['returning', 'refunding', 'returned'])
+        $totalRefundAmount = Order::whereIn('status', $targetStatuses)
                                   ->where('payment_status', 'paid')
                                   ->sum('total_price');
 
-        // Lưu ý: Kiểm tra file view của bạn là 'refund_list' hay 'refunds' cho đồng nhất
         return view('admin.orders.refund_list', compact('orders', 'totalRefundAmount'));
     }
 
@@ -85,6 +86,7 @@ class OrderController extends Controller
 
     /**
      * Cập nhật trạng thái đơn hàng.
+     * CẬP NHẬT: Tách biệt logic cộng kho cho trạng thái 'returned'
      */
     public function updateStatus(Request $request, $id)
     {
@@ -99,7 +101,8 @@ class OrderController extends Controller
         $oldStatus = $order->status;
         $newStatus = $request->status;
 
-        if (in_array($oldStatus, ['returned', 'refunded', 'canceled'])) {
+        // Chỉ khóa đơn khi đã thực sự kết thúc hoàn tiền hoặc hủy
+        if (in_array($oldStatus, ['refunded', 'canceled'])) {
             return back()->with('error', 'Đơn hàng này đã kết thúc, không thể thay đổi.');
         }
         
@@ -107,12 +110,14 @@ class OrderController extends Controller
             DB::beginTransaction();
             try {
                 // A. XỬ LÝ KHO HÀNG
+                // 1. Trừ kho khi xác nhận đơn mới
                 if ($oldStatus === 'pending' && in_array($newStatus, ['confirmed', 'paid'])) {
                     $this->handleStock($order, 'decrease');
                 }
 
-                $decreasedStatuses = ['confirmed', 'paid', 'shipping', 'success', 'returning', 'refunding'];
-                if (in_array($oldStatus, $decreasedStatuses) && in_array($newStatus, ['canceled', 'returned'])) {
+                // 2. CHỈ cộng lại kho khi: Hủy đơn HOẶC Khi thực sự xác nhận đã nhận hàng (returned)
+                // Lưu ý: Trạng thái 'returning_confirmed' (Đồng ý hoàn) sẽ KHÔNG chạy dòng này
+                if (in_array($newStatus, ['canceled', 'returned'])) {
                     $this->handleStock($order, 'increase');
                 }
 
@@ -120,6 +125,12 @@ class OrderController extends Controller
                 if (in_array($newStatus, ['success', 'paid'])) {
                     $order->payment_status = 'paid';
                     $order->paid_at = $order->paid_at ?? now();
+                     // GHI NHẬN THỜI GIAN GIAO HÀNG THÀNH CÔNG
+                    if ($newStatus === 'success') {
+                        if (Schema::hasColumn('orders', 'delivered_at')) {
+                            $order->delivered_at = $order->delivered_at ?? now();
+                        }
+                    }
                 } 
                 
                 if (in_array($newStatus, ['refunded', 'canceled'])) {
@@ -150,7 +161,12 @@ class OrderController extends Controller
 
                 DB::commit();
                 
-                // Chuyển hướng thông minh
+                // Điều hướng sau khi cập nhật
+                if ($newStatus === 'returning_confirmed') {
+                    return redirect()->route('admin.orders.refunds')
+                        ->with('success', 'Đã chấp nhận khiếu nại. Đơn hàng #' . $order->order_code . ' đã được chuyển sang danh sách hoàn tiền.');
+                }
+
                 if ($newStatus === 'refunded') {
                     return redirect()->route('admin.orders.refunds')
                         ->with('success', 'Đã xác nhận hoàn tiền đơn #' . $order->order_code);
@@ -170,7 +186,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Helper gửi mail (Tách riêng để code sạch hơn)
+     * Helper gửi mail
      */
     private function sendNotificationMail($status, $order, $email) {
         try {
@@ -180,6 +196,9 @@ class OrderController extends Controller
                     break;
                 case 'shipping':
                     Mail::to($email)->send(new OrderShippingMail($order));
+                    break;
+                case 'success':
+                    Mail::to($email)->send(new OrderDeliveredMail($order));
                     break;
                 case 'refunded':
                     Mail::to($email)->send(new OrderRefundedMail($order));
@@ -229,10 +248,13 @@ class OrderController extends Controller
     private function generateDefaultNote($old, $new, $name)
     {
         return match($new) {
+            'returning_confirmed' => "Admin $name đã chấp nhận khiếu nại. Đang chờ khách hoàn hàng và thực hiện kiểm kho.",
+            'returned'  => "Admin $name xác nhận đã nhận hàng thực tế. Sản phẩm đã được nhập lại vào kho.",
             'canceled'  => "Đơn hàng bị hủy bởi $name. Sản phẩm đã hoàn lại kho.",
             'refunded'  => "Admin $name đã xác nhận hoàn tiền thành công.",
             'shipping'  => "Đơn hàng đã được bàn giao vận chuyển.",
             'confirmed' => "Admin $name đã xác nhận đơn hàng.",
+            'success'   => "Admin $name xác nhận đơn hàng đã giao thành công.",
             default     => "Trạng thái đổi từ [$old] sang [$new] bởi $name.",
         };
     }

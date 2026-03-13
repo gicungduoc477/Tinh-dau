@@ -32,8 +32,22 @@
                 <div class="card border-0 shadow-sm mb-3 rounded-4 p-3 border-start border-success border-4">
                     <div class="row align-items-center">
                         <div class="col-md-2 col-4">
-                            {{-- Sử dụng ảnh sản phẩm gốc --}}
-                            <img src="{{ asset('uploads/product/' . $product->image) }}" class="img-fluid rounded-3 shadow-sm" alt="{{ $product->name }}">
+                            @php
+                                $pPath = ltrim($product->image, '/');
+                                if(str_starts_with($pPath, 'http')) {
+                                    $pImg = $pPath;
+                                } else {
+                                    // Logic check ảnh sản phẩm giống Tab 2 để đồng bộ
+                                    if (str_contains($pPath, 'uploads/product/')) {
+                                        $pImg = asset($pPath);
+                                    } else {
+                                        $pImg = file_exists(public_path('uploads/product/' . $pPath)) 
+                                                ? asset('uploads/product/' . $pPath) 
+                                                : asset('storage/' . $pPath);
+                                    }
+                                }
+                            @endphp
+                            <img src="{{ $pImg }}" class="img-fluid rounded-3 shadow-sm" alt="{{ $product->name }}" style="aspect-ratio: 1/1; object-fit: cover;" onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
                         </div>
                         <div class="col-md-7 col-8">
                             <h6 class="fw-bold mb-1 text-dark">{{ $product->name }}</h6>
@@ -62,15 +76,36 @@
             @forelse($completedReviews as $review)
                 <div class="card border-0 shadow-sm mb-3 rounded-4 p-3 bg-white">
                     <div class="row">
-                        {{-- Ảnh sản phẩm đã mua --}}
+                        {{-- Cột Ảnh sản phẩm --}}
                         <div class="col-md-2 col-3">
-                            <img src="{{ asset('uploads/product/' . $review->product->image) }}" class="img-fluid rounded-3 shadow-sm" style="filter: grayscale(20%);">
+                            @php
+                                $productImgName = trim($review->product->image ?? '');
+                                if (filter_var($productImgName, FILTER_VALIDATE_URL)) {
+                                    $productImgShow = $productImgName;
+                                } elseif (!empty($productImgName)) {
+                                    $pNameClean = ltrim($productImgName, '/');
+                                    if (str_contains($pNameClean, 'uploads/product/')) {
+                                        $productImgShow = asset($pNameClean);
+                                    } else {
+                                        $productImgShow = file_exists(public_path('uploads/product/' . $pNameClean)) 
+                                                            ? asset('uploads/product/' . $pNameClean) 
+                                                            : asset('storage/' . $pNameClean);
+                                    }
+                                } else {
+                                    $productImgShow = asset('backend/img/no-image.png');
+                                }
+                            @endphp
+                            <img src="{{ $productImgShow }}" 
+                                 class="img-fluid rounded-3 shadow-sm" 
+                                 alt="{{ $review->product->name ?? 'Sản phẩm' }}"
+                                 style="aspect-ratio: 1/1; object-fit: cover;"
+                                 onerror="this.onerror=null; this.src='{{ asset('backend/img/no-image.png') }}';">
                         </div>
                         
                         <div class="col-md-10 col-9">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="fw-bold text-dark mb-1">{{ $review->product->name }}</h6>
+                                    <h6 class="fw-bold text-dark mb-1">{{ $review->product->name ?? 'Sản phẩm' }}</h6>
                                     <div class="text-warning mb-2">
                                         @for($i=1; $i<=5; $i++)
                                             <i class="bi bi-star{{ $i <= $review->rating ? '-fill' : '' }}"></i>
@@ -82,21 +117,39 @@
                                 </span>
                             </div>
 
-                            {{-- Nội dung bình luận --}}
                             <div class="bg-light p-3 rounded-3 position-relative mb-2">
                                 <i class="bi bi-quote text-secondary opacity-25 position-absolute top-0 start-0 ms-1 mt-1" style="font-size: 1.5rem;"></i>
                                 <p class="small italic text-dark mb-0 ps-3">"{{ $review->comment }}"</p>
                             </div>
 
-                            {{-- HIỂN THỊ ẢNH ĐÁNH GIÁ TỪ CLOUDINARY --}}
+                            {{-- Media đính kèm (Ảnh hoặc Video) --}}
                             @if($review->image)
                                 <div class="mt-2">
-                                    <a href="{{ $review->image_url }}" target="_blank">
-                                        <img src="{{ $review->image_url }}" 
-                                             alt="Review Image" 
-                                             class="img-thumbnail rounded-3" 
-                                             style="width: 80px; height: 80px; object-fit: cover; cursor: zoom-in;">
-                                    </a>
+                                    @php
+                                        $rMedia = ltrim($review->image, '/');
+                                        if(str_starts_with($rMedia, 'http')) {
+                                            $finalMediaUrl = $rMedia;
+                                        } else {
+                                            $finalMediaUrl = file_exists(public_path('storage/' . $rMedia)) 
+                                                             ? asset('storage/' . $rMedia) 
+                                                             : asset('uploads/reviews/' . $rMedia);
+                                        }
+                                        $extension = strtolower(pathinfo($finalMediaUrl, PATHINFO_EXTENSION));
+                                        $isVideo = in_array($extension, ['mp4', 'mov', 'webm', 'ogg']);
+                                    @endphp
+
+                                    @if($isVideo)
+                                        <video width="120" height="120" class="rounded-3 shadow-sm border" controls style="object-fit: cover; background: #000;">
+                                            <source src="{{ $finalMediaUrl }}" type="video/{{ $extension == 'mov' ? 'mp4' : $extension }}">
+                                        </video>
+                                    @else
+                                        <a href="{{ $finalMediaUrl }}" target="_blank">
+                                            <img src="{{ $finalMediaUrl }}" 
+                                                 class="img-thumbnail rounded-3" 
+                                                 style="width: 80px; height: 80px; object-fit: cover; cursor: zoom-in;"
+                                                 onerror="this.style.display='none';">
+                                        </a>
+                                    @endif
                                 </div>
                             @endif
                         </div>
@@ -118,5 +171,6 @@
     .card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
     .italic { font-style: italic; }
     .img-thumbnail:hover { border-color: #198754; }
+    video:focus { outline: none; }
 </style>
 @endsection

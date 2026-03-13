@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use Carbon\Carbon; // Bổ sung Carbon để xử lý thời gian
 
 class OrderController extends Controller
 {
@@ -32,39 +33,55 @@ class OrderController extends Controller
     }
 
     /**
-     * Hiển thị chi tiết đơn hàng
+     * Hiển thị chi tiết đơn hàng (Bổ sung logic thời gian hoàn hàng)
      */
     public function show($id)
     {
-        if (Auth::check()) {
-            $order = Order::with(['items.product', 'statusHistories'])
-                ->where('user_id', Auth::id())
-                ->findOrFail($id);
-                
-            return view('orders.show', compact('order'));
-        }
+        $orderQuery = Order::with(['items.product', 'statusHistories']);
 
-        $guestOrderId = session('guest_order_id');
-        if ($guestOrderId && (int)$guestOrderId === (int)$id) {
-            $order = Order::with(['items.product', 'statusHistories'])->find($id);
-            if ($order) {
-                return view('orders.show', compact('order'));
+        if (Auth::check()) {
+            $order = $orderQuery->where('user_id', Auth::id())->findOrFail($id);
+        } else {
+            $guestOrderId = session('guest_order_id');
+            if ($guestOrderId && (int)$guestOrderId === (int)$id) {
+                $order = $orderQuery->find($id);
+            } else {
+                abort(403, 'Bạn không có quyền xem đơn hàng này.');
             }
         }
 
-        abort(403, 'Bạn không có quyền xem đơn hàng này.');
+        if (!$order) abort(404);
+
+        // --- BỔ SUNG LOGIC THỜI GIAN HOÀN HÀNG ---
+        $canReturn = false;
+        $remainingTime = null;
+
+        if ($order->status === 'success' && $order->updated_at) {
+            $expiryDate = $order->updated_at->addDays(7);
+            $now = now();
+
+            if ($now->lt($expiryDate)) {
+                $canReturn = true;
+                $diff = $now->diff($expiryDate);
+                
+                // Định dạng hiển thị: X ngày Y giờ
+                $remainingTime = $diff->d . ' ngày ' . $diff->h . ' giờ';
+            }
+        }
+        // ------------------------------------------
+
+        return view('orders.show', compact('order', 'canReturn', 'remainingTime'));
     }
 
     /**
-     * Khách hàng gửi yêu cầu Khiếu nại / Trả hàng (CẬP NHẬT THÊM NGÂN HÀNG)
+     * Khách hàng gửi yêu cầu Khiếu nại / Trả hàng (GIỮ NGUYÊN LOGIC ẢNH)
      */
     public function requestReturn(Request $request, $id)
     {
         $order = Order::where('user_id', Auth::id())
-            ->where('status', 'success') // Chỉ cho khiếu nại đơn đã thành công
+            ->where('status', 'success') 
             ->findOrFail($id);
 
-        // Kiểm tra thời hạn khiếu nại (theo logic trong Model)
         if (!$order->canBeReturned()) {
             return back()->with('error', 'Đã hết thời hạn khiếu nại cho đơn hàng này theo quy định.');
         }
@@ -73,7 +90,6 @@ class OrderController extends Controller
             'return_reason'  => 'required|string|max:255',
             'return_image'   => 'required|image|mimes:jpeg,png,jpg|max:2048',
             'return_note'    => 'nullable|string|max:500',
-            // Validate thêm các trường ngân hàng mới
             'bank_name'      => 'required|string|max:100',
             'account_number' => 'required|string|max:30',
             'account_holder' => 'required|string|max:100',
@@ -86,16 +102,14 @@ class OrderController extends Controller
         try {
             DB::beginTransaction();
 
-            // 1. Xử lý Upload ảnh minh chứng
             $imagePath = null;
             if ($request->hasFile('return_image')) {
-                // Lưu vào storage/app/public/returns
+                // Giữ nguyên đường dẫn lưu trữ returns trong public
                 $imagePath = $request->file('return_image')->store('returns', 'public');
             }
 
             $oldStatus = $order->status;
             
-            // 2. Cập nhật thông tin đơn hàng
             $order->update([
                 'status'         => 'returning',
                 'return_reason'  => $request->return_reason,
@@ -106,12 +120,11 @@ class OrderController extends Controller
                 'account_holder' => $request->account_holder,
             ]);
 
-            // 3. Ghi lịch sử thay đổi trạng thái
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => $oldStatus,
                 'to_status'   => 'returning',
-                'user_id'     => Auth::id(), // Đổi changed_by thành user_id cho khớp với các bảng khác của Hiếu
+                'user_id'     => Auth::id(),
                 'note'        => 'Khách yêu cầu hoàn tiền về: ' . $request->bank_name . ' - STK: ' . $request->account_number,
             ]);
 
@@ -125,12 +138,12 @@ class OrderController extends Controller
     }
 
     /**
-     * Khách hàng chủ động hủy đơn (Khi đơn còn đang chờ xác nhận)
+     * Khách hàng chủ động hủy đơn
      */
     public function cancel(Request $request, $id)
     {
         $order = Order::where('user_id', Auth::id())
-            ->whereIn('status', ['pending', 'paid']) // Cho phép hủy cả khi đã paid nhưng chưa confirmed
+            ->whereIn('status', ['pending', 'paid'])
             ->findOrFail($id);
 
         DB::beginTransaction();
@@ -139,14 +152,12 @@ class OrderController extends Controller
             $order->status = 'canceled';
             $order->save();
 
-            // Hoàn số lượng vào kho ngay lập tức
             foreach ($order->items as $item) {
                 if ($item->product) {
                     $item->product->increment('stock', $item->quantity);
                 }
             }
 
-            // Ghi lịch sử hủy đơn
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => $oldStatus,

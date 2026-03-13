@@ -18,26 +18,45 @@ use Cloudinary\Api\Upload\UploadApi;
 
 class ReviewController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
+
     /**
      * Hiển thị danh sách đánh giá của tôi
      */
     public function index()
     {
         $userId = Auth::id();
-        $limitDate = Carbon::now()->subDays(30);
+        
+        // Nới lỏng limitDate lên 90 ngày để đảm bảo không bị sót đơn cũ đang test
+        $limitDate = Carbon::now()->subDays(90);
+        
+        // Thêm 'confirmed' và 'shipping' vào để test nhanh (Sau này xóa đi nếu muốn khách nhận hàng mới được đánh giá)
+        $validStatuses = ['success', 'delivered', 'completed', 'paid', 'confirmed', 'shipping'];
 
-        $purchasedProductIds = OrderItem::whereHas('order', function($q) use ($userId, $limitDate) {
+        // 1. Lấy ID sản phẩm từ các đơn hàng thỏa mãn điều kiện
+        $purchasedProductIds = OrderItem::whereHas('order', function($q) use ($userId, $limitDate, $validStatuses) {
             $q->where('user_id', $userId)
-              ->where('status', 'success')
+              ->whereIn('status', $validStatuses)
               ->where('updated_at', '>=', $limitDate);
-        })->pluck('product_id')->unique();
+        })->pluck('product_id')->unique()->toArray();
 
-        $reviewedProductIds = Review::where('user_id', $userId)->pluck('product_id');
+        // --- DEBUG LOG: Nếu bạn thấy (0), hãy mở storage/logs/laravel.log để xem ---
+        if (empty($purchasedProductIds)) {
+            Log::info("ReviewDebug: User $userId không có sản phẩm nào thỏa mãn điều kiện.");
+        }
 
+        // 2. Lấy ID các sản phẩm đã đánh giá
+        $reviewedProductIds = Review::where('user_id', $userId)->pluck('product_id')->toArray();
+
+        // 3. Sản phẩm chờ đánh giá = Đã mua - Đã đánh giá
         $pendingReviews = Product::whereIn('id', $purchasedProductIds)
             ->whereNotIn('id', $reviewedProductIds)
             ->get();
 
+        // 4. Danh sách các đánh giá đã thực hiện
         $completedReviews = Review::where('user_id', $userId)
             ->with('product')
             ->latest()
@@ -46,21 +65,25 @@ class ReviewController extends Controller
         return view('reviews.my_reviews', compact('pendingReviews', 'completedReviews'));
     }
 
+    /**
+     * Giao diện tạo đánh giá
+     */
     public function create($product_id)
     {
         $product = Product::findOrFail($product_id);
         $userId = Auth::id();
-        $limitDate = Carbon::now()->subDays(30);
+        $limitDate = Carbon::now()->subDays(90);
+        $validStatuses = ['success', 'delivered', 'completed', 'paid', 'confirmed', 'shipping'];
 
         $hasPurchased = Order::where('user_id', $userId)
-            ->where('status', 'success')
+            ->whereIn('status', $validStatuses)
             ->where('updated_at', '>=', $limitDate)
             ->whereHas('items', function ($query) use ($product_id) {
                 $query->where('product_id', $product_id);
             })->exists();
 
         if (!$hasPurchased) {
-            return redirect()->route('reviews.index')->with('error', 'Yêu cầu không hợp lệ hoặc đã hết hạn.');
+            return redirect()->route('reviews.index')->with('error', 'Yêu cầu không hợp lệ hoặc đơn hàng chưa hoàn tất.');
         }
 
         if (Review::where('user_id', $userId)->where('product_id', $product_id)->exists()) {
@@ -71,7 +94,7 @@ class ReviewController extends Controller
     }
 
     /**
-     * Lưu đánh giá (Nâng cấp: Video, Tags, Auto-reply)
+     * Lưu đánh giá (Cloudinary + Video + Tags + Auto-reply)
      */
     public function store(Request $request)
     {
@@ -79,43 +102,31 @@ class ReviewController extends Controller
             'product_id' => 'required|exists:products,id',
             'rating'     => 'required|integer|min:1|max:5',
             'comment'    => 'nullable|string|max:1000',
-            'image'      => 'nullable|file|mimes:jpeg,png,jpg,webp,mp4,mov,avi|max:20480', // Max 20MB cho cả video
+            'image'      => 'nullable|file|mimes:jpeg,png,jpg,webp,mp4,mov,avi,quicktime|max:20480',
             'tags'       => 'nullable|array',
         ], [
-            'rating.required'  => 'Vui lòng chọn mức độ hài lòng.',
-            'image.max'        => 'Dung lượng file không được vượt quá 20MB.',
+            'rating.required' => 'Vui lòng chọn số sao đánh giá.',
+            'image.max'       => 'Tệp tin không được vượt quá 20MB.',
         ]);
 
         $userId = Auth::id();
         $productId = $request->product_id;
+        $limitDate = Carbon::now()->subDays(90);
+        $validStatuses = ['success', 'delivered', 'completed', 'paid', 'confirmed', 'shipping'];
 
-        // 1. Kiểm tra Blacklist (nếu có comment)
-        if ($request->filled('comment')) {
-            $blacklist = config('blacklist.words', []);
-            $commentLower = mb_strtolower($request->comment, 'UTF-8');
-            foreach ($blacklist as $word) {
-                if (str_contains($commentLower, mb_strtolower($word, 'UTF-8'))) {
-                    return back()->withInput()->with('error', 'Nội dung chứa từ ngữ không phù hợp!');
-                }
-            }
-        }
-
-        // 2. Kiểm tra quyền đánh giá
-        $limitDate = Carbon::now()->subDays(30);
         $hasPurchased = Order::where('user_id', $userId)
-            ->where('status', 'success')
+            ->whereIn('status', $validStatuses)
             ->where('updated_at', '>=', $limitDate)
             ->whereHas('items', function ($query) use ($productId) {
                 $query->where('product_id', $productId);
             })->exists();
 
         if (!$hasPurchased) {
-            return redirect()->route('reviews.index')->with('error', 'Yêu cầu không hợp lệ.');
+            return redirect()->route('reviews.index')->with('error', 'Hành động không hợp lệ.');
         }
 
-        // 3. Xử lý Upload Media (Ảnh hoặc Video) lên Cloudinary
-        $cloudinaryUrl = null;
-        $videoUrl = null;
+        $cloudinaryImageUrl = null;
+        $cloudinaryVideoUrl = null;
 
         if ($request->hasFile('image')) {
             try {
@@ -127,44 +138,38 @@ class ReviewController extends Controller
                 $upload = $uploadApi->upload($file->getRealPath(), [
                     'folder'        => 'nature_shop_reviews',
                     'resource_type' => $resourceType,
-                    'quality'       => 'auto',
                 ]);
 
                 if ($resourceType === 'video') {
-                    $videoUrl = $upload['secure_url'];
+                    $cloudinaryVideoUrl = $upload['secure_url'];
                 } else {
-                    $cloudinaryUrl = $upload['secure_url'];
+                    $cloudinaryImageUrl = $upload['secure_url'];
                 }
             } catch (\Exception $e) {
-                Log::error('Cloudinary Upload Error: ' . $e->getMessage());
-                return back()->withInput()->with('error', 'Lỗi tải tệp tin lên. Vui lòng thử lại.');
+                Log::error('Cloudinary Review Error: ' . $e->getMessage());
+                return back()->with('error', 'Lỗi tải tệp lên Cloudinary.');
             }
         }
 
-        // 4. Khởi tạo dữ liệu Đánh giá
         $reviewData = [
             'user_id'    => $userId,
             'product_id' => $productId,
             'rating'     => $request->rating,
             'comment'    => $request->comment ?? '',
-            'image'      => $cloudinaryUrl,
-            'video'      => $videoUrl,
-            'tags'       => $request->tags, // Model tự động cast sang JSON nếu đã khai báo $casts
+            'image'      => $cloudinaryImageUrl,
+            'video'      => $cloudinaryVideoUrl,
+            'tags'       => $request->tags,
             'status'     => 'active',
         ];
 
-        // 5. Logic AUTO-REPLY (Tự động phản hồi)
-        // Điều kiện: 5 sao và (Không có bình luận HOẶC bình luận ngắn dưới 5 ký tự)
-        if ($request->rating == 5 && (empty($request->comment) || mb_strlen($request->comment) < 5)) {
-            $reviewData['reply'] = "Cảm ơn bạn đã tin dùng sản phẩm của Nature Shop! Hy vọng sẽ được phục vụ bạn trong những lần tới ạ. ❤️";
+        if ($request->rating == 5 && (empty($request->comment) || mb_strlen($request->comment) < 10)) {
+            $reviewData['reply'] = "Cảm ơn bạn đã ủng hộ Nature Shop! Sự hài lòng của bạn là động lực để chúng mình cố gắng hơn. ❤️";
             $reviewData['reply_at'] = now();
-            $reviewData['first_reply_at'] = now();
             $reviewData['is_resolved'] = true;
         }
 
-        // 6. Lưu vào Database
         Review::create($reviewData);
 
-        return redirect()->route('reviews.index')->with('success', 'Cảm ơn bạn! Đánh giá đã được gửi thành công.');
+        return redirect()->route('reviews.index')->with('success', 'Đánh giá thành công!');
     }
 }

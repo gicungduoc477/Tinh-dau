@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -22,6 +23,18 @@ class Product extends Model
                 $product->slug = $slug;
             }
         });
+    }
+
+    public function getImageUrlAttribute()
+    {
+        if ($this->image) {
+            // Updated to check for full path and direct URL
+            if (Str::startsWith($this->image, ['http://', 'https://'])) {
+                return $this->image;
+            }
+            return asset('uploads/product/' . $this->image);
+        }
+        return asset('backend/img/no-image.png');
     }
 
     public function getRouteKeyName()

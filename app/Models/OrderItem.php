@@ -11,7 +11,7 @@ class OrderItem extends Model
     use HasFactory;
 
     /**
-     * Đảm bảo fillable khớp hoàn toàn với các trường được dùng trong CheckoutController.
+     * Các trường có thể gán hàng loạt.
      */
     protected $fillable = [
         'order_id', 
@@ -21,7 +21,7 @@ class OrderItem extends Model
     ];
 
     /**
-     * Ép kiểu dữ liệu để khi tính toán không bị lỗi định dạng chuỗi.
+     * Ép kiểu dữ liệu để đảm bảo tính toán chính xác.
      */
     protected $casts = [
         'quantity' => 'integer',
@@ -29,7 +29,8 @@ class OrderItem extends Model
     ];
 
     /**
-     * Liên kết ngược lại đơn hàng (Order).
+     * Liên kết tới đơn hàng (Order).
+     * Rất quan trọng để hàm ReviewController::index() có thể lọc theo user_id và status.
      */
     public function order(): BelongsTo
     {
@@ -37,7 +38,7 @@ class OrderItem extends Model
     }
 
     /**
-     * Liên kết tới sản phẩm (Product) để lấy thông tin như: name, image, slug.
+     * Liên kết tới sản phẩm (Product).
      */
     public function product(): BelongsTo
     {
@@ -49,16 +50,15 @@ class OrderItem extends Model
     // =========================================================================
 
     /**
-     * Tự động tính thành tiền cho từng item (Giá x Số lượng).
-     * Cách dùng ở View: $item->subtotal
+     * Tính thành tiền: $item->subtotal
      */
     public function getSubtotalAttribute(): float
     {
-        return $this->price * $this->quantity;
+        return (float) ($this->price * $this->quantity);
     }
 
     /**
-     * Lấy tên sản phẩm an toàn ngay cả khi sản phẩm gốc bị xóa (nếu bạn không dùng soft delete).
+     * Lấy tên sản phẩm an toàn: $item->product_name
      */
     public function getProductNameAttribute(): string
     {

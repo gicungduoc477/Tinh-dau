@@ -55,12 +55,25 @@
                                         $currentPrice = (float)($item['price'] ?? 0);
                                         $qty = (int)($item['quantity'] ?? 1);
                                         $itemTotal = $currentPrice * $qty;
+
+                                        // Xử lý logic URL ảnh tương tự file chi tiết sản phẩm
+                                        $imgName = trim($item['image'] ?? '');
+                                        if (filter_var($imgName, FILTER_VALIDATE_URL)) {
+                                            $finalUrl = $imgName;
+                                        } elseif (!empty($imgName) && !str_contains($imgName, '/')) {
+                                            $finalUrl = asset('uploads/product/' . $imgName);
+                                        } elseif (!empty($imgName)) {
+                                            $finalUrl = asset(ltrim($imgName, '/'));
+                                        } else {
+                                            $finalUrl = asset('backend/img/no-image.png');
+                                        }
                                     @endphp
                                     <tr data-id="{{ $id }}">
                                         <td class="ps-4">
                                             <div class="d-flex align-items-center">
-                                                <img src="{{ (!empty($item['image']) && file_exists(public_path('uploads/product/' . $item['image']))) ? asset('uploads/product/' . $item['image']) : asset('backend/img/no-image.png') }}" 
-                                                     class="img-fluid rounded" style="width: 60px; height: 60px; object-fit: cover;">
+                                                <img src="{{ $finalUrl }}" 
+                                                     class="img-fluid rounded" style="width: 60px; height: 60px; object-fit: cover;"
+                                                     onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=No+Image';">
                                                 <div class="ms-3">
                                                     <div class="fw-bold text-dark">{{ $item['name'] ?? 'Sản phẩm' }}</div>
                                                     <small class="text-muted">Mã SP: #{{ $item['product_id'] ?? $id }}</small>
@@ -73,7 +86,7 @@
                                         <td style="width: 140px;" class="text-center">
                                             <div class="input-group input-group-sm justify-content-center">
                                                 <input type="number" class="form-control qty-input-field update-cart" 
-                                                       data-id="{{ $id }}" value="{{ $qty }}" min="1">
+                                                        data-id="{{ $id }}" value="{{ $qty }}" min="1">
                                             </div>
                                         </td>
                                         <td class="text-end fw-bold text-dark">
@@ -102,12 +115,25 @@
                             $currentPrice = (float)($item['price'] ?? 0);
                             $qty = (int)($item['quantity'] ?? 1);
                             $itemTotal = $currentPrice * $qty;
+
+                            // Xử lý logic URL ảnh (Lặp lại cho mobile)
+                            $imgName = trim($item['image'] ?? '');
+                            if (filter_var($imgName, FILTER_VALIDATE_URL)) {
+                                $finalUrl = $imgName;
+                            } elseif (!empty($imgName) && !str_contains($imgName, '/')) {
+                                $finalUrl = asset('uploads/product/' . $imgName);
+                            } elseif (!empty($imgName)) {
+                                $finalUrl = asset(ltrim($imgName, '/'));
+                            } else {
+                                $finalUrl = asset('backend/img/no-image.png');
+                            }
                         @endphp
                         <div class="card cart-card border-0 shadow-sm mb-3" data-id="{{ $id }}">
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-3">
-                                        <img src="{{ (!empty($item['image']) && file_exists(public_path('uploads/product/' . $item['image']))) ? asset('uploads/product/' . $item['image']) : asset('backend/img/no-image.png') }}" class="img-fluid rounded" style="object-fit: cover;">
+                                        <img src="{{ $finalUrl }}" class="img-fluid rounded" style="object-fit: cover;"
+                                             onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=No+Image';">
                                     </div>
                                     <div class="col-9">
                                         <div class="d-flex flex-column h-100">
@@ -116,7 +142,7 @@
                                             
                                             <div class="d-flex justify-content-between align-items-center mt-auto">
                                                  <input type="number" class="form-control qty-input-field update-cart" 
-                                                       data-id="{{ $id }}" value="{{ $qty }}" min="1" style="width: 70px;">
+                                                        data-id="{{ $id }}" value="{{ $qty }}" min="1" style="width: 70px;">
                                                 
                                                 <span class="fw-bold text-dark small subtotal-item">{{ number_format($itemTotal, 0, ',', '.') }} đ</span>
                                                 
@@ -167,15 +193,13 @@
 </div>
 
 @push('scripts')
+{{-- Giữ nguyên phần script Ajax của bạn --}}
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     $(document).ready(function() {
-        // Lắng nghe sự kiện thay đổi số lượng bằng Ajax
         $('.update-cart').on('change', function() {
             let quantity = $(this).val();
             let id = $(this).data('id');
-            // Tìm container của item (trên desktop là <tr>, mobile là div.card)
-            let cartItemContainer = $(this).closest('[data-id="' + id + '"]');
 
             if(quantity < 1) {
                 $(this).val(1);
@@ -192,17 +216,12 @@
                 },
                 success: function (response) {
                     if(response.success) {
-                        // Cập nhật thành tiền từng dòng (hoạt động cho cả 2 layout)
-                        // Phải tìm lại vì có 2 element giống nhau trong DOM (1 ẩn, 1 hiện)
                         $('[data-id="' + id + '"]').find('.subtotal-item').text(response.newSubtotal);
-
-                        // Cập nhật tổng tiền toàn giỏ hàng
                         $('.total-cart').text(response.newTotal);
                     }
                 },
                 error: function(xhr) {
                     alert('Không thể cập nhật giỏ hàng. Vui lòng thử lại!');
-                    console.log(xhr.responseText);
                 }
             });
         });
