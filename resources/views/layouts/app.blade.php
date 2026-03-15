@@ -21,6 +21,7 @@
             --secondary-bg: #f8f9fa;
             --text-dark: #2d3748;
             --accent-yellow: #eab308;
+            --zalo-blue: #0084ff;
         }
 
         body { font-family: 'Inter', sans-serif; background-color: var(--secondary-bg); color: var(--text-dark); display: flex; flex-direction: column; min-height: 100vh; }
@@ -133,6 +134,31 @@
 
         .copyright-border { border-top: 1px solid rgba(255,255,255,0.1); margin-top: 70px; padding-top: 30px; }
 
+        /* --- Floating Contact & Back to Top --- */
+        .sticky-tools {
+            position: fixed; bottom: 25px; right: 25px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .tool-item {
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: white; text-decoration: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .tool-item:hover { transform: scale(1.15); color: white; }
+
+        .zalo-btn { background: var(--zalo-blue); padding: 5px; }
+        .messenger-btn { background: linear-gradient(45deg, #006AFF, #00C6FF); font-size: 1.5rem; }
+        .hotline-btn { background: var(--primary-color); font-size: 1.4rem; animation: pulse-green 2s infinite; }
+        .back-to-top { background: var(--forest-green); font-size: 1.2rem; visibility: hidden; opacity: 0; }
+        .back-to-top.show { visibility: visible; opacity: 1; }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(39, 174, 96, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(39, 174, 96, 0); }
+        }
+
         .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); border-radius: 8px; font-weight: 600; padding: 8px 24px; }
         .toast-container { z-index: 9999; }
         main { flex: 1; }
@@ -152,8 +178,8 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav mx-auto">
                 <li class="nav-item"><a class="nav-link" href="{{ route('products.index') }}">Cửa hàng</a></li>
-                <li class="nav-item"><a class="nav-link" href="#">Về chúng tôi</a></li>
-                <li class="nav-item"><a class="nav-link" href="#">Liên hệ</a></li>
+                <li class="nav-item"><a class="nav-link" href="{{ route('about') }}">Về chúng tôi</a></li>
+                <li class="nav-item"><a class="nav-link" href="{{ route('contact') }}">Liên hệ</a></li>
             </ul>
             <ul class="navbar-nav ms-auto align-items-center">
                 @php
@@ -170,34 +196,13 @@
                 </li>
 
                 @auth
-                    @php
-                        $recentOrders = \App\Models\Order::where('user_id', auth()->id())->latest()->take(3)->get();
-                        $pendingCount = \App\Models\Order::where('user_id', auth()->id())->where('status','pending')->count();
-                    @endphp
                     <li class="nav-item dropdown me-3">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-bell fs-4 text-dark"></i>
-                            @if($pendingCount > 0)
-                                <span class="badge bg-danger ms-1" id="order-count">{{ $pendingCount }}</span>
-                            @endif
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-3 animate__animated animate__fadeIn">
-                            <li class="dropdown-header">Đơn hàng gần đây</li>
-                            @forelse($recentOrders as $ro)
-                                <li>
-                                    <a class="dropdown-item d-flex justify-content-between align-items-center" href="{{ route('orders.show', $ro->id) }}">
-                                        <div>
-                                            <div class="small fw-bold">#{{ $ro->id }}</div>
-                                            <div class="text-muted small">{{ number_format($ro->total_price,0,',','.') }} đ</div>
-                                        </div>
-                                        <span class="badge bg-{{ $ro->status === 'pending' ? 'warning' : 'success' }}">{{ $ro->status }}</span>
-                                    </a>
-                                </li>
-                            @empty
-                                <li class="dropdown-item text-muted">Không có đơn hàng</li>
-                            @endforelse
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-center small text-primary" href="{{ route('orders.index') }}">Xem tất cả đơn hàng</a></li>
+                            <li class="dropdown-header">Thông báo mới</li>
+                            <li><a class="dropdown-item text-center small text-muted" href="#">Không có thông báo mới</a></li>
                         </ul>
                     </li>
 
@@ -213,10 +218,7 @@
                                 <li><a class="dropdown-item py-2" href="{{ route('admin.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>Quản trị</a></li>
                             @endif
                             <li><a class="dropdown-item py-2" href="{{ route('profile.index') }}"><i class="bi bi-person-circle me-2"></i>Hồ sơ</a></li>
-                            
-                            {{-- MỤC ĐÁNH GIÁ SẢN PHẨM ĐƯỢC THÊM TẠI ĐÂY --}}
                             <li><a class="dropdown-item py-2" href="{{ route('reviews.index') }}"><i class="bi bi-star-fill text-warning me-2"></i>Đánh giá của tôi</a></li>
-                            
                             <li><hr class="dropdown-divider opacity-50"></li>
                             <li>
                                 <form method="POST" action="{{ route('logout') }}">
@@ -228,11 +230,7 @@
                     </li>
                 @else
                     <li class="nav-item"><a class="nav-link" href="{{ route('login') }}">Đăng nhập</a></li>
-                    @if (Route::has('register'))
-                        <li class="nav-item">
-                            <a href="{{ route('register') }}" class="btn btn-primary btn-sm ms-lg-3 shadow-sm px-3 py-2">Đăng ký</a>
-                        </li>
-                    @endif
+                    <li class="nav-item"><a href="{{ route('register') }}" class="btn btn-primary btn-sm ms-lg-3 shadow-sm px-3 py-2">Đăng ký</a></li>
                 @endauth
             </ul>
         </div>
@@ -243,21 +241,34 @@
     @yield('content')
 </main>
 
+{{-- Sticky Tools --}}
+<div class="sticky-tools">
+    <a href="#" class="tool-item back-to-top" id="backToTop" title="Lên đầu trang">
+        <i class="bi bi-chevron-up"></i>
+    </a>
+    <a href="https://zalo.me/0395422569" target="_blank" class="tool-item zalo-btn" title="Chat Zalo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Icon_of_Zalo.svg/1200px-Icon_of_Zalo.svg.png" width="100%" alt="Zalo">
+    </a>
+    <a href="https://m.me/yourpage" target="_blank" class="tool-item messenger-btn" title="Facebook Messenger">
+        <i class="bi bi-messenger"></i>
+    </a>
+    <a href="tel:0395422569" class="tool-item hotline-btn" title="Gọi hotline">
+        <i class="bi bi-telephone-fill"></i>
+    </a>
+</div>
+
 <div class="footer-section">
     <div class="footer-contact-bar">
-        <div class="container">
-            <div class="row text-center fw-bold">
-                <a href="tel:+84123456789" class="col-md-4 contact-item mb-3 mb-md-0">
-                    <i class="bi bi-telephone-plus-fill fs-4"></i> 
-                    <span>HỖ TRỢ: +84 123 456 789</span>
+        <div class="container text-center fw-bold">
+            <div class="row">
+                <a href="tel:+84395422569" class="col-md-4 contact-item mb-3 mb-md-0">
+                    <i class="bi bi-telephone-plus-fill fs-4"></i> <span>HỖ TRỢ: +84 123 456 789</span>
                 </a>
-                <a href="mailto:hello@natureshop.vn" class="col-md-4 contact-item mb-3 mb-md-0">
-                    <i class="bi bi-envelope-heart-fill fs-4"></i> 
-                    <span>EMAIL: hello@natureshop.vn</span>
+                <a href="mailto:vanhieubui403@gmail.com" class="col-md-4 contact-item mb-3 mb-md-0">
+                    <i class="bi bi-envelope-heart-fill fs-4"></i> <span>EMAIL: hello@natureshop.vn</span>
                 </a>
                 <div class="col-md-4 contact-item">
-                    <i class="bi bi-geo-alt-fill fs-4"></i> 
-                    <span>ĐỊA CHỈ: Thảo Điền, TP. HCM</span>
+                    <i class="bi bi-geo-alt-fill fs-4"></i> <span>ĐỊA CHỈ: Thảo Điền, TP. HCM</span>
                 </div>
             </div>
         </div>
@@ -268,56 +279,40 @@
             <div class="row g-5">
                 <div class="col-lg-4 col-md-6">
                     <h5 class="footer-title">Về Nature Shop</h5>
-                    <p class="small lh-lg opacity-75 mb-4">
-                        Chúng tôi tự hào cung cấp các giải pháp mùi hương thuần khiết từ thiên nhiên. 
-                        Từng giọt tinh dầu là một lời cam kết về chất lượng và sự an toàn cho gia đình bạn.
-                    </p>
+                    <p class="small lh-lg opacity-75 mb-4">Chúng tôi cung cấp giải pháp mùi hương thuần khiết từ thiên nhiên.</p>
                     <div class="social-icons">
                         <a href="#"><i class="bi bi-facebook"></i></a>
                         <a href="#"><i class="bi bi-instagram"></i></a>
                         <a href="#"><i class="bi bi-tiktok"></i></a>
-                        <a href="#"><i class="bi bi-youtube"></i></a>
                     </div>
                 </div>
-
                 <div class="col-lg-2 col-md-6">
                     <h5 class="footer-title">Sản Phẩm</h5>
                     <ul class="list-unstyled">
                         <li><a href="#" class="footer-link">Tinh dầu nguyên chất</a></li>
-                        <li><a href="#" class="footer-link">Tinh dầu hỗn hợp</a></li>
                         <li><a href="#" class="footer-link">Máy khuếch tán</a></li>
-                        <li><a href="#" class="footer-link">Quà tặng thiên nhiên</a></li>
                     </ul>
                 </div>
-
                 <div class="col-lg-2 col-md-6">
                     <h5 class="footer-title">Thông Tin</h5>
                     <ul class="list-unstyled">
                         <li><a href="#" class="footer-link">Chính sách bảo mật</a></li>
-                        <li><a href="#" class="footer-link">Vận chuyển & Giao hàng</a></li>
-                        <li><a href="#" class="footer-link">Câu hỏi thường gặp</a></li>
-                        <li><a href="#" class="footer-link">Tuyển dụng</a></li>
+                        <li><a href="#" class="footer-link">Vận chuyển</a></li>
                     </ul>
                 </div>
-
                 <div class="col-lg-4 col-md-6">
                     <h5 class="footer-title">Đăng Ký Bản Tin</h5>
-                    <p class="small opacity-75 mb-4">Nhận thông tin sớm nhất về sản phẩm mới và kiến thức chăm sóc sức khỏe.</p>
                     <div class="footer-subscribe">
                         <form action="#" class="input-group">
-                            <input type="email" class="form-control" placeholder="Email của bạn...">
+                            <input type="email" class="form-control" placeholder="Email...">
                             <button class="btn btn-subscribe" type="submit">ĐĂNG KÝ</button>
                         </form>
                     </div>
                 </div>
             </div>
-
             <div class="row copyright-border align-items-center">
                 <div class="col-md-6 text-center text-md-start">
-                    <p class="small mb-0 opacity-50">&copy; {{ date('Y') }} <strong>Nature Shop</strong>. Nâng tầm không gian sống thuần khiết.</p>
-                </div>
-                <div class="col-md-6 text-center text-md-end mt-3 mt-md-0">
-                    <img src="https://theme.hstatic.net/1000069962/1000395433/14/method_share.png?v=334" height="22" alt="Payment" style="filter: brightness(0) invert(1) opacity(0.6);">
+                    <p class="small mb-0 opacity-50">&copy; {{ date('Y') }} <strong>Nature Shop</strong>.</p>
                 </div>
             </div>
         </div>
@@ -326,13 +321,12 @@
 
 <div class="toast-container position-fixed top-0 end-0 p-3">
     @if(session('message') || session('success') || session('error'))
-    <div class="toast show align-items-center text-bg-{{ session('error') ? 'danger' : 'success' }} border-0 mb-2 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="d-flex">
-            <div class="toast-body px-3 py-2">
-                <i class="bi bi-{{ session('error') ? 'exclamation-circle' : 'check-circle' }}-fill me-2"></i>
+    <div class="toast show text-bg-{{ session('error') ? 'danger' : 'success' }} border-0 shadow-lg" role="alert">
+        <div class="d-flex p-2">
+            <div class="toast-body">
                 {{ session('message') ?? session('success') ?? session('error') }}
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            <button type="button" class="btn-close btn-close-white m-auto me-2" data-bs-dismiss="toast"></button>
         </div>
     </div>
     @endif
@@ -340,16 +334,20 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    function updateCartUI(count) {
-        const el = document.getElementById('cart-count');
-        if (el) {
-            el.textContent = count;
-            el.classList.add('animate__animated', 'animate__rubberBand');
-            el.addEventListener('animationend', () => {
-                el.classList.remove('animate__animated', 'animate__rubberBand');
-            }, {once: true});
+    // Xử lý Back to Top và hiển thị Icon
+    const backToTop = document.getElementById('backToTop');
+    window.onscroll = function() {
+        if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+            backToTop.classList.add('show');
+        } else {
+            backToTop.classList.remove('show');
         }
-    }
+    };
+
+    backToTop.onclick = function(e) {
+        e.preventDefault();
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    };
 
     document.addEventListener('DOMContentLoaded', function() {
         var toastElements = [].slice.call(document.querySelectorAll('.toast'));

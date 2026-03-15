@@ -28,41 +28,42 @@
     <div class="tab-content mt-4" id="pills-tabContent">
         {{-- Tab 1: Chờ đánh giá --}}
         <div class="tab-pane fade show active" id="pending" role="tabpanel" aria-labelledby="pills-pending-tab">
-            @forelse($pendingReviews as $product)
-                <div class="card border-0 shadow-sm mb-3 rounded-4 p-3 border-start border-success border-4">
+            @forelse($pendingReviews as $item)
+                @if($item->product) {{-- Đảm bảo sản phẩm tồn tại --}}
+                <div class="card border-0 shadow-sm mb-3 rounded-4 p-3 border-start border-warning border-4">
                     <div class="row align-items-center">
                         <div class="col-md-2 col-4">
                             @php
-                                $pPath = ltrim($product->image, '/');
+                                $pPath = ltrim($item->product->image, '/');
                                 if(str_starts_with($pPath, 'http')) {
                                     $pImg = $pPath;
                                 } else {
-                                    // Logic check ảnh sản phẩm giống Tab 2 để đồng bộ
                                     if (str_contains($pPath, 'uploads/product/')) {
                                         $pImg = asset($pPath);
                                     } else {
-                                        $pImg = file_exists(public_path('uploads/product/' . $pPath)) 
-                                                ? asset('uploads/product/' . $pPath) 
+                                        $pImg = file_exists(public_path('uploads/product/' . $pPath))
+                                                ? asset('uploads/product/' . $pPath)
                                                 : asset('storage/' . $pPath);
                                     }
                                 }
                             @endphp
-                            <img src="{{ $pImg }}" class="img-fluid rounded-3 shadow-sm" alt="{{ $product->name }}" style="aspect-ratio: 1/1; object-fit: cover;" onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
+                            <img src="{{ $pImg }}" class="img-fluid rounded-3 shadow-sm" alt="{{ $item->product->name }}" style="aspect-ratio: 1/1; object-fit: cover;" onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
                         </div>
                         <div class="col-md-7 col-8">
-                            <h6 class="fw-bold mb-1 text-dark">{{ $product->name }}</h6>
+                            <h6 class="fw-bold mb-1 text-dark">{{ $item->product->name }}</h6>
                             <p class="text-muted small mb-0">
-                                <i class="bi bi-tag me-1"></i>Phân loại: {{ $product->classification ?? 'Mặc định' }}
+                                <i class="bi bi-bag-check me-1"></i>Từ đơn hàng <a href="{{ route('orders.show', $item->order_id) }}" class="fw-bold text-decoration-none">#{{ $item->order->order_code }}</a>
                             </p>
-                            <p class="text-success small mb-0"><i class="bi bi-check2-circle me-1"></i>Đã nhận hàng thành công</p>
+                            <p class="text-success small mb-0"><i class="bi bi-calendar-check me-1"></i>Giao ngày {{ optional($item->order->updated_at)->format('d/m/Y') }}</p>
                         </div>
                         <div class="col-md-3 text-end mt-3 mt-md-0">
-                            <a href="{{ route('reviews.create', $product->id) }}" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
+                            <a href="{{ route('reviews.create', ['product_id' => $item->product_id, 'order_id' => $item->order_id]) }}" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm">
                                 <i class="bi bi-pencil-square me-1"></i> Đánh giá ngay
                             </a>
                         </div>
                     </div>
                 </div>
+                @endif
             @empty
                 <div class="text-center py-5 bg-white rounded-4 shadow-sm">
                     <img src="https://cdn-icons-png.flaticon.com/512/4076/4076432.png" width="100" class="mb-3 opacity-50">

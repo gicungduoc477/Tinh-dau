@@ -3,158 +3,145 @@
 @section('title', 'Giỏ hàng của bạn')
 
 @section('content')
-<div class="container mt-5 pb-5">
+<div class="container mt-3 mt-lg-5 pb-5">
     @push('styles')
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        .cart-card { border-radius: 14px; box-shadow: 0 10px 30px rgba(18,38,23,0.06); overflow: hidden; background: #fff; }
-        .cart-product-image { width:80px; height:80px; object-fit:cover; border-radius:8px; border: 1px solid #eee; background: #f9f9f9; }
-        .cart-summary { border-radius:12px; background:#fff; box-shadow:0 6px 18px rgba(18,38,23,0.04); padding:25px; position: sticky; top: 20px; }
-        .qty-input-field { width:65px; text-align: center; border: 1px solid #ced4da; border-radius: 4px; }
-        .btn-delete-custom { color: #dc3545; border: 1px solid #f8d7da; background: #fff5f5; padding: 8px 12px; border-radius: 6px; transition: 0.3s; cursor: pointer; }
-        .btn-delete-custom:hover { background: #dc3545; color: #fff; }
+        :root { --primary-color: #28a745; --bg-body: #f8f9fa; --danger-color: #dc3545; }
+        body { background-color: var(--bg-body); }
+        
+        /* Card tổng thể */
+        .cart-card { border-radius: 20px; border: none; box-shadow: 0 8px 25px rgba(0,0,0,0.05); background: #fff; overflow: hidden; }
+        .cart-item { border-bottom: 1px solid #f1f1f1; transition: 0.3s; position: relative; }
+        .cart-item:last-child { border-bottom: none; }
+        .cart-item:hover { background-color: #fcfcfc; }
+
+        /* Hình ảnh sản phẩm */
+        .product-img-wrap { width: 90px; height: 90px; flex-shrink: 0; }
+        .cart-product-image { width: 100%; height: 100%; object-fit: cover; border-radius: 15px; border: 1px solid #f0f0f0; }
+
+        /* Bộ tăng giảm số lượng mini */
+        .quantity-group { 
+            display: flex; align-items: center; background: #f1f3f5; 
+            border-radius: 10px; padding: 2px; width: fit-content;
+        }
+        .qty-btn { 
+            border: none; background: transparent; width: 30px; height: 30px; 
+            display: flex; align-items: center; justify-content: center; 
+            color: #495057; font-size: 0.85rem; transition: 0.2s;
+        }
+        .qty-btn:hover { color: var(--primary-color); }
+        .qty-input-field { 
+            width: 35px; border: none; background: transparent; 
+            text-align: center; font-weight: 700; font-size: 0.95rem; 
+        }
+        .qty-input-field::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        /* Nút xóa */
+        .btn-remove-item { 
+            width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; 
+            border-radius: 50%; background: #fff5f5; color: var(--danger-color); 
+            border: 1px solid #feb2b2; cursor: pointer; transition: 0.2s;
+        }
+        .btn-remove-item:hover { background: var(--danger-color); color: #fff; transform: scale(1.1); }
+
+        /* Summary Sticky Mobile */
+        .cart-summary { 
+            border-radius: 20px; background: #fff; padding: 24px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06); border: 1px solid #f0f0f0;
+        }
+
+        @media (max-width: 991.98px) {
+            .product-img-wrap { width: 80px; height: 80px; }
+            .cart-summary-fixed { 
+                position: fixed; bottom: 0; left: 0; right: 0; z-index: 1050; 
+                background: rgba(255, 255, 255, 0.92);
+                backdrop-filter: blur(15px);
+                border-radius: 25px 25px 0 0; 
+                padding: 15px 20px 25px 20px;
+                box-shadow: 0 -8px 25px rgba(0,0,0,0.1);
+                border-top: 1px solid rgba(0,0,0,0.05);
+            }
+            .container { padding-bottom: 160px !important; } /* Tránh bị che bởi thanh thanh toán */
+            .product-name { font-size: 0.95rem; font-weight: 700; color: #2d3436; }
+        }
     </style>
     @endpush
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="fw-bold text-dark"><i class="fas fa-shopping-basket me-2 text-success"></i>Giỏ hàng của bạn</h3>
-        <a href="{{ route('products.index') }}" class="btn btn-outline-success btn-sm rounded-pill px-4">
-            <i class="fas fa-arrow-left me-2"></i>Tiếp tục mua sắm
+    {{-- Header --}}
+    <div class="d-flex justify-content-between align-items-center mb-4 px-1">
+        <div>
+            <h3 class="fw-bold mb-0">Giỏ hàng</h3>
+            <span class="text-muted small">Bạn có {{ count($cart ?? []) }} món trong danh sách</span>
+        </div>
+        <a href="{{ route('products.index') }}" class="btn btn-outline-success border-2 rounded-pill px-3 fw-bold btn-sm">
+            <i class="fas fa-plus me-1"></i> Thêm món
         </a>
     </div>
 
-    <div id="cart-content">
-        @if(empty($cart) || count($cart) == 0)
-            <div class="card cart-card border-0 p-5 text-center shadow-sm">
-                <div class="mb-4">
-                    <i class="fas fa-shopping-cart fa-4x text-light"></i>
-                </div>
-                <h4 class="text-muted">Giỏ hàng hiện đang trống</h4>
-                <div class="mt-2">
-                    <a href="{{ route('products.index') }}" class="btn btn-success px-5 py-2 rounded-pill shadow-sm">MUA SẮM NGAY</a>
-                </div>
+    @if(empty($cart) || count($cart) == 0)
+        <div class="card cart-card p-5 text-center">
+            <div class="py-4">
+                <i class="fas fa-shopping-bag fa-4x text-light mb-3"></i>
+                <h5 class="fw-bold text-secondary">Giỏ hàng của bạn đang trống</h5>
+                <p class="text-muted small px-4">Hãy chọn cho mình những món ngon nhất từ thực đơn của chúng tôi!</p>
+                <a href="{{ route('products.index') }}" class="btn btn-success mt-3 rounded-pill px-4 fw-bold">XEM THỰC ĐƠN NGAY</a>
             </div>
-        @else
-            <div class="row">
-                <div class="col-lg-8">
-                    {{-- Giao diện cho màn hình lớn (Desktop) --}}
-                    <div class="card cart-card border-0 shadow-sm d-none d-lg-block">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0 align-middle">
-                                <thead class="table-light small text-uppercase">
-                                    <tr>
-                                        <th class="ps-4 py-3">Sản phẩm</th>
-                                        <th class="text-end">Đơn giá</th>
-                                        <th class="text-center">Số lượng</th>
-                                        <th class="text-end">Thành tiền</th>
-                                        <th class="text-center"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($cart as $id => $item)
-                                    @php 
-                                        $currentPrice = (float)($item['price'] ?? 0);
-                                        $qty = (int)($item['quantity'] ?? 1);
-                                        $itemTotal = $currentPrice * $qty;
-
-                                        // Xử lý logic URL ảnh tương tự file chi tiết sản phẩm
-                                        $imgName = trim($item['image'] ?? '');
-                                        if (filter_var($imgName, FILTER_VALIDATE_URL)) {
-                                            $finalUrl = $imgName;
-                                        } elseif (!empty($imgName) && !str_contains($imgName, '/')) {
-                                            $finalUrl = asset('uploads/product/' . $imgName);
-                                        } elseif (!empty($imgName)) {
-                                            $finalUrl = asset(ltrim($imgName, '/'));
-                                        } else {
-                                            $finalUrl = asset('backend/img/no-image.png');
-                                        }
-                                    @endphp
-                                    <tr data-id="{{ $id }}">
-                                        <td class="ps-4">
-                                            <div class="d-flex align-items-center">
-                                                <img src="{{ $finalUrl }}" 
-                                                     class="img-fluid rounded" style="width: 60px; height: 60px; object-fit: cover;"
-                                                     onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=No+Image';">
-                                                <div class="ms-3">
-                                                    <div class="fw-bold text-dark">{{ $item['name'] ?? 'Sản phẩm' }}</div>
-                                                    <small class="text-muted">Mã SP: #{{ $item['product_id'] ?? $id }}</small>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="fw-bold text-dark">{{ number_format($currentPrice, 0, ',', '.') }} đ</span>
-                                        </td>
-                                        <td style="width: 140px;" class="text-center">
-                                            <div class="input-group input-group-sm justify-content-center">
-                                                <input type="number" class="form-control qty-input-field update-cart" 
-                                                        data-id="{{ $id }}" value="{{ $qty }}" min="1">
-                                            </div>
-                                        </td>
-                                        <td class="text-end fw-bold text-dark">
-                                            <span class="subtotal-item">{{ number_format($itemTotal, 0, ',', '.') }} đ</span>
-                                        </td>
-                                        <td class="text-center pe-4">
-                                            <form action="{{ route('cart.remove') }}" method="POST">
-                                                @csrf
-                                                <input type="hidden" name="product_id" value="{{ $id }}">
-                                                <button type="submit" class="btn-delete-custom border-0 shadow-sm" onclick="return confirm('Xóa sản phẩm này khỏi giỏ hàng?')">
-                                                    <i class="fas fa-trash-alt"></i>
-                                                </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {{-- Giao diện cho màn hình nhỏ (Mobile) --}}
-                    <div class="d-lg-none">
+        </div>
+    @else
+        <div class="row g-4">
+            {{-- Danh sách sản phẩm --}}
+            <div class="col-lg-8">
+                <div class="card cart-card">
+                    <div class="card-body p-0">
                         @foreach($cart as $id => $item)
                         @php 
-                            $currentPrice = (float)($item['price'] ?? 0);
+                            $price = (float)($item['price'] ?? 0);
                             $qty = (int)($item['quantity'] ?? 1);
-                            $itemTotal = $currentPrice * $qty;
-
-                            // Xử lý logic URL ảnh (Lặp lại cho mobile)
                             $imgName = trim($item['image'] ?? '');
-                            if (filter_var($imgName, FILTER_VALIDATE_URL)) {
-                                $finalUrl = $imgName;
-                            } elseif (!empty($imgName) && !str_contains($imgName, '/')) {
-                                $finalUrl = asset('uploads/product/' . $imgName);
-                            } elseif (!empty($imgName)) {
-                                $finalUrl = asset(ltrim($imgName, '/'));
-                            } else {
-                                $finalUrl = asset('backend/img/no-image.png');
-                            }
+                            $finalUrl = filter_var($imgName, FILTER_VALIDATE_URL) ? $imgName : 
+                                       (!empty($imgName) ? (str_contains($imgName, '/') ? asset(ltrim($imgName, '/')) : asset('uploads/product/' . $imgName)) : 
+                                       asset('backend/img/no-image.png'));
                         @endphp
-                        <div class="card cart-card border-0 shadow-sm mb-3" data-id="{{ $id }}">
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-3">
-                                        <img src="{{ $finalUrl }}" class="img-fluid rounded" style="object-fit: cover;"
-                                             onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=No+Image';">
+                        
+                        <div class="cart-item p-3 p-lg-4" data-id="{{ $id }}">
+                            <div class="d-flex align-items-start align-items-lg-center">
+                                {{-- Thumbnail --}}
+                                <div class="product-img-wrap">
+                                    <img src="{{ $finalUrl }}" class="cart-product-image" onerror="this.src='https://placehold.co/150x150?text=Food'">
+                                </div>
+
+                                {{-- Details --}}
+                                <div class="ms-3 flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="product-name text-truncate mb-1" style="max-width: 200px;">{{ $item['name'] ?? 'Sản phẩm' }}</div>
+                                        <form action="{{ route('cart.remove') }}" method="POST">
+                                            @csrf
+                                            <input type="hidden" name="product_id" value="{{ $id }}">
+                                            <button type="submit" class="btn-remove-item" onclick="return confirm('Xóa món này khỏi giỏ?')">
+                                                <i class="fas fa-times small"></i>
+                                            </button>
+                                        </form>
                                     </div>
-                                    <div class="col-9">
-                                        <div class="d-flex flex-column h-100">
-                                            <p class="fw-bold text-dark small mb-1">{{ $item['name'] ?? 'Sản phẩm' }}</p>
-                                            <p class="text-muted small mb-2">Đơn giá: <span class="fw-bold text-dark">{{ number_format($currentPrice, 0, ',', '.') }} đ</span></p>
-                                            
-                                            <div class="d-flex justify-content-between align-items-center mt-auto">
-                                                 <input type="number" class="form-control qty-input-field update-cart" 
-                                                        data-id="{{ $id }}" value="{{ $qty }}" min="1" style="width: 70px;">
-                                                
-                                                <span class="fw-bold text-dark small subtotal-item">{{ number_format($itemTotal, 0, ',', '.') }} đ</span>
-                                                
-                                                <form action="{{ route('cart.remove') }}" method="POST">
-                                                    @csrf
-                                                    <input type="hidden" name="product_id" value="{{ $id }}">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Xóa sản phẩm này khỏi giỏ hàng?')">
-                                                        <i class="fas fa-trash-alt"></i>
-                                                    </button>
-                                                </form>
+                                    
+                                    <div class="d-flex flex-column flex-lg-row justify-content-lg-between align-items-lg-center mt-2 mt-lg-0">
+                                        <div class="fw-bold text-success h6 mb-2 mb-lg-0">{{ number_format($price, 0, ',', '.') }} đ</div>
+                                        
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="quantity-group me-lg-4">
+                                                <button type="button" class="qty-btn btn-minus"><i class="fas fa-minus"></i></button>
+                                                <input type="number" class="qty-input-field update-cart" data-id="{{ $id }}" value="{{ $qty }}" min="1">
+                                                <button type="button" class="qty-btn btn-plus"><i class="fas fa-plus"></i></button>
+                                            </div>
+                                            <div class="fw-bold text-dark subtotal-item d-none d-lg-block">
+                                                {{ number_format($price * $qty, 0, ',', '.') }} đ
                                             </div>
                                         </div>
+                                    </div>
+                                    {{-- Giá phụ cho mobile --}}
+                                    <div class="d-lg-none text-end mt-1">
+                                        <span class="small text-muted">Thành tiền: </span>
+                                        <span class="fw-bold text-dark subtotal-item">{{ number_format($price * $qty, 0, ',', '.') }} đ</span>
                                     </div>
                                 </div>
                             </div>
@@ -162,49 +149,65 @@
                         @endforeach
                     </div>
                 </div>
+            </div>
 
-                <div class="col-lg-4">
-                    <div class="cart-summary shadow-sm">
-                        <h5 class="fw-bold mb-4 pb-2 border-bottom">Tóm tắt đơn hàng</h5>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Tạm tính</span>
-                            <span class="fw-bold text-dark total-cart">{{ number_format($total, 0, ',', '.') }} đ</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="text-secondary">Phí vận chuyển</span>
-                            <span class="text-success fw-bold">Miễn phí</span>
-                        </div>
-                        <hr class="my-4">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <span class="h5 fw-bold mb-0">Tổng cộng</span>
-                            <span class="h4 text-success fw-bold mb-0 total-cart">{{ number_format($total, 0, ',', '.') }} đ</span>
-                        </div>
-                        <a href="{{ route('checkout') }}" class="btn btn-success btn-lg w-100 py-3 fw-bold rounded-3">
-                            TIẾN HÀNH THANH TOÁN
-                        </a>
-                        <div class="mt-3 text-center">
-                            <small class="text-muted"><i class="fas fa-shield-alt me-1"></i> Thanh toán an toàn & bảo mật</small>
-                        </div>
+            {{-- Checkout Sidebar --}}
+            <div class="col-lg-4">
+                <div class="cart-summary cart-summary-fixed">
+                    <h5 class="fw-bold mb-4 d-none d-lg-block">Chi tiết thanh toán</h5>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-lg-3 mb-2">
+                        <span class="text-muted">Tạm tính</span>
+                        <span class="fw-bold total-cart">{{ number_format($total, 0, ',', '.') }} đ</span>
                     </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-muted small">Phí giao hàng</span>
+                        <span class="text-success fw-bold small">FREE</span>
+                    </div>
+                    
+                    <hr class="d-none d-lg-block my-3">
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-lg-4 mb-3">
+                        <span class="h6 fw-bold mb-0">TỔNG CỘNG</span>
+                        <span class="h4 text-success fw-bold mb-0 total-cart">{{ number_format($total, 0, ',', '.') }} đ</span>
+                    </div>
+
+                    <a href="{{ route('checkout') }}" class="btn btn-success w-100 py-3 fw-bold rounded-pill shadow-sm text-uppercase border-0">
+                        Đặt hàng ngay <i class="fas fa-chevron-right ms-2 small"></i>
+                    </a>
                 </div>
             </div>
-        @endif
-    </div>
+        </div>
+    @endif
 </div>
 
 @push('scripts')
-{{-- Giữ nguyên phần script Ajax của bạn --}}
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     $(document).ready(function() {
-        $('.update-cart').on('change', function() {
-            let quantity = $(this).val();
-            let id = $(this).data('id');
+        // Tăng
+        $('.btn-plus').on('click', function() {
+            let input = $(this).siblings('.update-cart');
+            input.val(parseInt(input.val()) + 1).trigger('change');
+        });
 
-            if(quantity < 1) {
-                $(this).val(1);
-                return;
-            }
+        // Giảm
+        $('.btn-minus').on('click', function() {
+            let input = $(this).siblings('.update-cart');
+            let val = parseInt(input.val());
+            if(val > 1) { input.val(val - 1).trigger('change'); }
+        });
+
+        // Ajax cập nhật
+        $('.update-cart').on('change', function() {
+            let qty = $(this).val();
+            let id = $(this).data('id');
+            let row = $(this).closest('.cart-item');
+            
+            if(qty < 1) { $(this).val(1); return; }
+
+            row.css('opacity', '0.6');
 
             $.ajax({
                 url: '{{ route("cart.update") }}',
@@ -212,16 +215,20 @@
                 data: {
                     _token: '{{ csrf_token() }}',
                     product_id: id,
-                    quantity: quantity
+                    quantity: qty
                 },
-                success: function (response) {
-                    if(response.success) {
-                        $('[data-id="' + id + '"]').find('.subtotal-item').text(response.newSubtotal);
-                        $('.total-cart').text(response.newTotal);
+                success: function (res) {
+                    row.css('opacity', '1');
+                    if(res.success) {
+                        // Cập nhật thành tiền của món đó (cả trên PC và Mobile)
+                        row.find('.subtotal-item').text(res.newSubtotal + ' đ');
+                        // Cập nhật tổng cộng giỏ hàng
+                        $('.total-cart').text(res.newTotal + ' đ');
                     }
                 },
-                error: function(xhr) {
-                    alert('Không thể cập nhật giỏ hàng. Vui lòng thử lại!');
+                error: function() {
+                    row.css('opacity', '1');
+                    alert('Lỗi cập nhật giỏ hàng!');
                 }
             });
         });

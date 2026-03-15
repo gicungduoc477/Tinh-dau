@@ -34,10 +34,19 @@ use App\Mail\WelcomeUserMail;
 
 /*
 |--------------------------------------------------------------------------
-| 1. FRONTEND ROUTES (Trang khách hàng)
+| 1. FRONTEND ROUTES (Trang khách hàng công khai)
 |--------------------------------------------------------------------------
 */
 Route::get('/', [FrontendProductController::class, 'index'])->name('home');
+
+// Trang giới thiệu & Liên hệ mới thêm
+Route::get('/ve-chung-toi', function () {
+    return view('pages.about');
+})->name('about');
+
+Route::get('/lien-he', function () {
+    return view('pages.contact');
+})->name('contact');
 
 Route::controller(FrontendProductController::class)->group(function () {
     Route::get('/products', 'index')->name('products.index');
@@ -47,7 +56,6 @@ Route::controller(FrontendProductController::class)->group(function () {
     Route::get('/search', 'search')->name('products.search');
 });
 
-// Sửa lại group để không bị báo đỏ trong VS Code
 Route::group(['as' => 'cart.', 'controller' => FrontendCartController::class], function () {
     Route::get('/cart', 'index')->name('index');
     Route::post('/cart/add', 'add')->name('add');
@@ -65,7 +73,7 @@ Route::get('/orders/{id}', [FrontendOrderController::class, 'show'])->name('orde
 
 /*
 |--------------------------------------------------------------------------
-| 2. USER AUTHENTICATION (Đăng nhập/Đăng ký)
+| 2. USER AUTHENTICATION (Khách chưa đăng nhập)
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest')->group(function () {
@@ -103,16 +111,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/{id}/return', 'requestReturn')->name('requestReturn');
     });
 
+    // Route Đánh giá (Review)
     Route::controller(FrontendReviewController::class)->group(function () {
         Route::get('/my-reviews', 'index')->name('reviews.index'); 
-        Route::get('/reviews/create/{product_id}', 'create')->name('reviews.create'); 
+        Route::get('/reviews/create/{product_id}/{order_id?}', 'create')->name('reviews.create'); 
         Route::post('/reviews/store', 'store')->name('reviews.store'); 
     });
 });
 
 /*
 |--------------------------------------------------------------------------
-| 4. ADMIN ROUTES (Trang quản trị)
+| 4. ADMIN ROUTES (Quản trị viên)
 |--------------------------------------------------------------------------
 */
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -191,17 +200,13 @@ Route::controller(PaymentController::class)->group(function () {
 });
 
 /**
- * HỆ THỐNG FIX LỖI TỰ ĐỘNG (Dành cho Hiếu)
+ * HỆ THỐNG FIX LỖI TỰ ĐỘNG
  */
 Route::get('/fix-system', function () {
     try {
-        // 1. Dọn sạch giỏ hàng rác
         DB::table('carts')->delete(); 
-
-        // 2. Reset tồn kho (Sửa quantity thành stock cho đúng database của Hiếu)
         DB::table('products')->update(['stock' => 20]);
 
-        // 3. Làm mới Cache (Bỏ qua symlink để không bị lỗi Permission)
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         Artisan::call('view:clear');
@@ -217,7 +222,6 @@ Route::get('/fix-system', function () {
     }
 });
 
-// Preview Mail
 Route::get('/dev/mail-preview', function () {
     $user = User::first() ?? new User(['name' => 'Khách Hàng', 'email' => 'demo@example.com']);
     return new WelcomeUserMail($user);

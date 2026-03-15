@@ -29,34 +29,37 @@ class ReviewController extends Controller
     public function index()
     {
         $userId = Auth::id();
-        
-        // Nới lỏng limitDate lên 90 ngày để đảm bảo không bị sót đơn cũ đang test
-        $limitDate = Carbon::now()->subDays(90);
-        
-        // Thêm 'confirmed' và 'shipping' vào để test nhanh (Sau này xóa đi nếu muốn khách nhận hàng mới được đánh giá)
-        $validStatuses = ['success', 'delivered', 'completed', 'paid', 'confirmed', 'shipping'];
 
-        // 1. Lấy ID sản phẩm từ các đơn hàng thỏa mãn điều kiện
-        $purchasedProductIds = OrderItem::whereHas('order', function($q) use ($userId, $limitDate, $validStatuses) {
-            $q->where('user_id', $userId)
-              ->whereIn('status', $validStatuses)
-              ->where('updated_at', '>=', $limitDate);
-        })->pluck('product_id')->unique()->toArray();
-
-        // --- DEBUG LOG: Nếu bạn thấy (0), hãy mở storage/logs/laravel.log để xem ---
-        if (empty($purchasedProductIds)) {
-            Log::info("ReviewDebug: User $userId không có sản phẩm nào thỏa mãn điều kiện.");
-        }
-
-        // 2. Lấy ID các sản phẩm đã đánh giá
-        $reviewedProductIds = Review::where('user_id', $userId)->pluck('product_id')->toArray();
-
-        // 3. Sản phẩm chờ đánh giá = Đã mua - Đã đánh giá
-        $pendingReviews = Product::whereIn('id', $purchasedProductIds)
-            ->whereNotIn('id', $reviewedProductIds)
+        // 1. Lấy TẤT CẢ các sản phẩm mà User này đã từng mua
+        // Không lọc trạng thái, không lọc ngày tháng ở đây để đảm bảo đơn hàng PHẢI hiện ra
+        $orderItems = OrderItem::with(['product', 'order'])
+            ->whereHas('order', function($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
             ->get();
 
-        // 4. Danh sách các đánh giá đã thực hiện
+        // 2. Lấy danh sách ID các sản phẩm user này đã đánh giá rồi
+        $reviewedProductIds = Review::where('user_id', $userId)->pluck('product_id')->toArray();
+
+        // 3. Lọc ra các sản phẩm Chờ đánh giá
+        $pendingReviews = collect([]);
+        $processedProductIds = [];
+
+        foreach ($orderItems as $item) {
+            // Chỉ thêm vào danh sách nếu: 
+            // - Có sản phẩm tồn tại
+            // - Sản phẩm này user CHƯA đánh giá bao giờ
+            // - Chưa có trong danh sách hiển thị hiện tại (tránh trùng nếu mua 2 đơn cùng 1 món)
+            if ($item->product && 
+                !in_array($item->product_id, $reviewedProductIds) && 
+                !in_array($item->product_id, $processedProductIds)) {
+                
+                $pendingReviews->push($item);
+                $processedProductIds[] = $item->product_id;
+            }
+        }
+
+        // 4. Lấy danh sách đã đánh giá
         $completedReviews = Review::where('user_id', $userId)
             ->with('product')
             ->latest()
@@ -68,33 +71,31 @@ class ReviewController extends Controller
     /**
      * Giao diện tạo đánh giá
      */
-    public function create($product_id)
+    public function create($product_id, $order_id = null)
     {
         $product = Product::findOrFail($product_id);
         $userId = Auth::id();
-        $limitDate = Carbon::now()->subDays(90);
-        $validStatuses = ['success', 'delivered', 'completed', 'paid', 'confirmed', 'shipping'];
 
-        $hasPurchased = Order::where('user_id', $userId)
-            ->whereIn('status', $validStatuses)
-            ->where('updated_at', '>=', $limitDate)
+        // Kiểm tra quyền sở hữu đơn hàng (không cần lọc trạng thái gắt gao)
+        $orderExists = Order::where('user_id', $userId)
             ->whereHas('items', function ($query) use ($product_id) {
                 $query->where('product_id', $product_id);
             })->exists();
 
-        if (!$hasPurchased) {
-            return redirect()->route('reviews.index')->with('error', 'Yêu cầu không hợp lệ hoặc đơn hàng chưa hoàn tất.');
+        if (!$orderExists) {
+            return redirect()->route('reviews.index')->with('error', 'Bạn không thể đánh giá sản phẩm này.');
         }
 
+        // Không cho đánh giá trùng
         if (Review::where('user_id', $userId)->where('product_id', $product_id)->exists()) {
             return redirect()->route('reviews.index')->with('info', 'Bạn đã đánh giá sản phẩm này rồi.');
         }
 
-        return view('reviews.create', compact('product'));
+        return view('reviews.create', compact('product', 'order_id'));
     }
 
     /**
-     * Lưu đánh giá (Cloudinary + Video + Tags + Auto-reply)
+     * Lưu đánh giá
      */
     public function store(Request $request)
     {
@@ -104,26 +105,10 @@ class ReviewController extends Controller
             'comment'    => 'nullable|string|max:1000',
             'image'      => 'nullable|file|mimes:jpeg,png,jpg,webp,mp4,mov,avi,quicktime|max:20480',
             'tags'       => 'nullable|array',
-        ], [
-            'rating.required' => 'Vui lòng chọn số sao đánh giá.',
-            'image.max'       => 'Tệp tin không được vượt quá 20MB.',
         ]);
 
         $userId = Auth::id();
         $productId = $request->product_id;
-        $limitDate = Carbon::now()->subDays(90);
-        $validStatuses = ['success', 'delivered', 'completed', 'paid', 'confirmed', 'shipping'];
-
-        $hasPurchased = Order::where('user_id', $userId)
-            ->whereIn('status', $validStatuses)
-            ->where('updated_at', '>=', $limitDate)
-            ->whereHas('items', function ($query) use ($productId) {
-                $query->where('product_id', $productId);
-            })->exists();
-
-        if (!$hasPurchased) {
-            return redirect()->route('reviews.index')->with('error', 'Hành động không hợp lệ.');
-        }
 
         $cloudinaryImageUrl = null;
         $cloudinaryVideoUrl = null;
@@ -146,29 +131,29 @@ class ReviewController extends Controller
                     $cloudinaryImageUrl = $upload['secure_url'];
                 }
             } catch (\Exception $e) {
-                Log::error('Cloudinary Review Error: ' . $e->getMessage());
-                return back()->with('error', 'Lỗi tải tệp lên Cloudinary.');
+                Log::error('Cloudinary Error: ' . $e->getMessage());
+                return back()->with('error', 'Lỗi tải tệp.');
             }
         }
 
-        $reviewData = [
+        $review = Review::create([
             'user_id'    => $userId,
             'product_id' => $productId,
             'rating'     => $request->rating,
             'comment'    => $request->comment ?? '',
             'image'      => $cloudinaryImageUrl,
             'video'      => $cloudinaryVideoUrl,
-            'tags'       => $request->tags,
+            'tags'       => $request->tags ? json_encode($request->tags, JSON_UNESCAPED_UNICODE) : null,
             'status'     => 'active',
-        ];
+        ]);
 
-        if ($request->rating == 5 && (empty($request->comment) || mb_strlen($request->comment) < 10)) {
-            $reviewData['reply'] = "Cảm ơn bạn đã ủng hộ Nature Shop! Sự hài lòng của bạn là động lực để chúng mình cố gắng hơn. ❤️";
-            $reviewData['reply_at'] = now();
-            $reviewData['is_resolved'] = true;
+        // Auto-reply cho 5 sao
+        if ($request->rating == 5) {
+            $review->update([
+                'reply' => "Cảm ơn bạn đã tin tưởng Nature Shop! ❤️",
+                'reply_at' => now(),
+            ]);
         }
-
-        Review::create($reviewData);
 
         return redirect()->route('reviews.index')->with('success', 'Đánh giá thành công!');
     }
