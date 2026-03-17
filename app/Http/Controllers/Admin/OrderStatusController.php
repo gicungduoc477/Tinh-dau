@@ -38,6 +38,8 @@ class OrderStatusController extends Controller
             'shipping'  => 'info',      // Đang giao hàng (Màu xanh)
             'success'   => 'success',   // Giao hàng thành công (Màu xanh lá)
             'returning' => 'dark',      // Đang khiếu nại/trả hàng (Màu đen/xám tối)
+            'returning_confirmed' => 'info', // Đã xác nhận khiếu nại (Màu xanh dương)
+            'refunding' => 'warning',   // Đang hoàn tiền (Màu vàng)
             'returned'  => 'secondary', // Đã trả hàng xong (Màu xám)
             'canceled'  => 'danger',    // Đã hủy (Màu đỏ)
         ];

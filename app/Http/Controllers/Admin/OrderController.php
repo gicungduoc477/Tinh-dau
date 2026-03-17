@@ -90,6 +90,8 @@ class OrderController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $validStatuses = array_keys(Order::$statuses);
+        // Bổ sung các trạng thái xử lý hoàn tiền nếu chưa có trong Model để tránh lỗi validation
+        $validStatuses = array_merge($validStatuses, ['returning_confirmed', 'refunding']);
 
         $request->validate([
             'status' => 'required|in:' . implode(',', $validStatuses),
