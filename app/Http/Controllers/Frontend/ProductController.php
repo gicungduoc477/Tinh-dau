@@ -24,8 +24,16 @@ class ProductController extends Controller
             }
         }
 
+        // Cập nhật logic lọc theo phân loại (Đồng bộ với Admin để tránh lỗi sót sản phẩm)
         if ($request->filled('class')) {
-            $query->where('classification', $request->class);
+            $classification = $request->class;
+            if ($classification === 'Tinh dầu nguyên chất') {
+                $query->whereIn('classification', ['Tinh dầu nguyên chất', 'PURE OIL']);
+            } elseif ($classification === 'Hương liệu pha') {
+                $query->whereIn('classification', ['Hương liệu pha', 'FRAGRANCE']);
+            } else {
+                $query->where('classification', $classification);
+            }
         }
 
         if ($request->filled('q')) {
@@ -40,6 +48,24 @@ class ProductController extends Controller
         $categories = Category::withCount('products')->get();
 
         return view('products.index', compact('products', 'categories'));
+    }
+
+    /**
+     * Hỗ trợ Route category (định nghĩa trong web.php)
+     */
+    public function category(Request $request, Category $category)
+    {
+        // Merge slug vào request để tái sử dụng logic lọc của hàm index
+        $request->merge(['category' => $category->slug]);
+        return $this->index($request);
+    }
+
+    /**
+     * Hỗ trợ Route search (định nghĩa trong web.php)
+     */
+    public function search(Request $request)
+    {
+        return $this->index($request);
     }
 
     /**
