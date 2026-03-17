@@ -7,7 +7,7 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary; 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\File;
 
@@ -107,6 +107,7 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         
+        // Xóa file local nếu có
         if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
             $oldPath = public_path($product->image);
             if (File::exists($oldPath)) {
@@ -119,7 +120,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Hàm lưu dữ liệu chính (Sử dụng storeOnCloudinary để ép Render phải chạy)
+     * Logic lưu dữ liệu (Ép sử dụng Facade Cloudinary để dòng import sáng lên)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -132,25 +133,32 @@ class ProductController extends Controller
 
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $uploadedPath = null;
-            $cloudinaryUrl = config('cloudinary.cloud_url');
 
-            // Nếu có cấu hình Cloudinary (Render), dùng hàm storeOnCloudinary
-            if ($cloudinaryUrl) {
+            // Kiểm tra config từ file config/cloudinary.php hoặc .env
+            $cloudName = config('cloudinary.cloud_name') ?? env('CLOUDINARY_CLOUD_NAME');
+
+            if ($cloudName) {
                 try {
-                    // Cách này tự động xử lý file stream và đẩy thẳng lên folder mong muốn
-                    $result = $request->file('image')->storeOnCloudinary('tinh_dau_shop/products');
-                    $uploadedPath = $result->getSecurePath();
+                    // SỬ DỤNG FACADE ĐỂ VS CODE HẾT BÁO ẨN DÒNG IMPORT
+                    $uploadedPath = Cloudinary::upload($request->file('image')->getRealPath(), [
+                        'folder' => 'tinh_dau_shop/products'
+                    ])->getSecurePath();
                 } catch (\Exception $e) {
                     Log::error("Cloudinary Upload Error: " . $e->getMessage());
                 }
             }
 
-            // Nếu không có Cloudinary hoặc lỗi, lưu Local (Dành cho môi trường phát triển)
+            // Fallback về Local nếu Cloud lỗi/không có
             if (!$uploadedPath) {
                 $uploadedPath = $this->handleLocalUpload($request->file('image'));
             }
 
             if ($uploadedPath) {
+                // Xóa ảnh cũ nếu là file local để tiết kiệm dung lượng máy nhà
+                if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
+                    $oldLocalPath = public_path($product->image);
+                    if (File::exists($oldLocalPath)) { File::delete($oldLocalPath); }
+                }
                 $product->image = $uploadedPath;
             }
         }
