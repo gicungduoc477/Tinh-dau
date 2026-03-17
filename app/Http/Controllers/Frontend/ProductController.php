@@ -33,14 +33,24 @@ class ProductController extends Controller
 
         // --- Lọc theo Phân loại (Classification) - CẬP NHẬT LINH HOẠT ---
         if ($request->filled('class')) {
-            $cls = urldecode($request->class);
+            $cls = $request->class;
             
-            /**
-             * Giải pháp: Sử dụng LIKE '%...%' để tìm kiếm tương đối.
-             * Nếu URL gửi 'Hương liệu' hay 'Tinh dầu không nguyên chất', 
-             * nó vẫn sẽ tìm thấy 'Hương liệu pha' nếu dữ liệu khớp một phần.
-             */
-            $query->where('classification', 'LIKE', '%' . $cls . '%');
+            // Nhóm 1: Tinh dầu nguyên chất
+            if (in_array($cls, ['Tinh dầu nguyên chất', 'PURE OIL'])) {
+                $query->whereIn('classification', ['Tinh dầu nguyên chất', 'PURE OIL']);
+            } 
+            // Nhóm 2: Tinh dầu hỗn hợp (Blend)
+            elseif (in_array($cls, ['Tinh dầu hỗn hợp (Blend Oil)', 'Blend Oil'])) {
+                $query->whereIn('classification', ['Tinh dầu hỗn hợp (Blend Oil)', 'Blend Oil']);
+            } 
+            // Nhóm 3: Sửa lỗi lọc "Hương liệu pha" (Link menu là "Tinh dầu không nguyên chất")
+            elseif (in_array($cls, ['Tinh dầu không nguyên chất', 'Hương liệu pha', 'FRAGRANCE'])) {
+                $query->whereIn('classification', ['Hương liệu pha', 'FRAGRANCE', 'Tinh dầu không nguyên chất']);
+            } 
+            // Fallback: Tìm kiếm tương đối cho các trường hợp khác
+            else {
+                $query->where('classification', 'LIKE', '%' . $cls . '%');
+            }
         }
 
         // --- Lọc theo từ khóa tìm kiếm (Search) ---
