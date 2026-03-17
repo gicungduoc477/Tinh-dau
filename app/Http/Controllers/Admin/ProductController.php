@@ -134,8 +134,8 @@ class ProductController extends Controller
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $uploadedPath = null;
 
-            // Kiểm tra cấu hình Cloudinary qua ENV hoặc Config
-            $hasCloudUrl = env('CLOUDINARY_URL') ?: config('cloudinary.cloud_url');
+            // Sử dụng config() thay vì env() để đảm bảo hoạt động đúng khi cache config trên Render
+            $hasCloudUrl = config('cloudinary.cloud_url');
 
             if ($hasCloudUrl) {
                 try {
