@@ -31,17 +31,16 @@ class ProductController extends Controller
             }
         }
 
-        // --- Lọc theo Phân loại (Classification) - ĐÃ CẬP NHẬT RÕ RÀNG ---
+        // --- Lọc theo Phân loại (Classification) - CẬP NHẬT LINH HOẠT ---
         if ($request->filled('class')) {
             $cls = urldecode($request->class);
             
             /**
-             * Thay vì dùng whereIn để nhóm, chúng ta dùng so sánh trực tiếp.
-             * Điều này đảm bảo:
-             * - Bấm "Hương liệu pha" -> Chỉ ra Hương liệu pha.
-             * - Bấm "Tinh dầu hỗn hợp" -> Chỉ ra Tinh dầu hỗn hợp.
+             * Giải pháp: Sử dụng LIKE '%...%' để tìm kiếm tương đối.
+             * Nếu URL gửi 'Hương liệu' hay 'Tinh dầu không nguyên chất', 
+             * nó vẫn sẽ tìm thấy 'Hương liệu pha' nếu dữ liệu khớp một phần.
              */
-            $query->where('classification', 'LIKE', $cls);
+            $query->where('classification', 'LIKE', '%' . $cls . '%');
         }
 
         // --- Lọc theo từ khóa tìm kiếm (Search) ---
@@ -55,7 +54,7 @@ class ProductController extends Controller
 
         /**
          * paginate(9) kết hợp withQueryString() 
-         * Cực kỳ quan trọng để giữ tham số ?class=... khi sang trang 2, 3
+         * Giúp giữ tham số ?class=... khi sang trang 2, 3
          */
         $products = $query->latest()->paginate(9)->withQueryString();
         
@@ -121,7 +120,7 @@ class ProductController extends Controller
     }
 
     /**
-     * 3. Xử lý AJAX lọc đánh giá (cho trải nghiệm mượt mà)
+     * 3. Xử lý AJAX lọc đánh giá
      */
     public function fetchReviews(Request $request, $id)
     {

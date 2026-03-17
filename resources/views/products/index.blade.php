@@ -414,7 +414,7 @@
             
             container.appendChild(drop);
 
-            // Tạo ripple khi giọt nước "chạm đất" (gần hết animation)
+            // Tạo ripple khi giọt nước "chạm đất"
             setTimeout(() => {
                 createRipple(leftPos);
                 drop.remove();
@@ -428,7 +428,7 @@
             const ripple = document.createElement('div');
             ripple.classList.add('ripple');
             ripple.style.left = left + '%';
-            ripple.style.bottom = '15%'; // Vị trí "mặt nước" trong khu vực welcome
+            ripple.style.bottom = '15%'; 
             
             container.appendChild(ripple);
             setTimeout(() => { ripple.remove(); }, 800);
