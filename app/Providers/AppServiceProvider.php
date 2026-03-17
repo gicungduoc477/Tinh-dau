@@ -28,32 +28,34 @@ class AppServiceProvider extends ServiceProvider
         // 1. Cấu hình phân trang Bootstrap 5
         Paginator::useBootstrapFive();
 
-        // 2. ÉP DÙNG HTTPS KHI CHẠY TRÊN RENDER
+        // 2. ÉP DÙNG HTTPS VÀ XỬ LÝ PROXY TRÊN RENDER
         if (config('app.env') !== 'local') {
             URL::forceScheme('https');
-
-            // 3. TỰ ĐỘNG XÓA CACHE CẤU HÌNH
-            try {
-                Artisan::call('config:clear');
-            } catch (\Exception $e) {
-                // Bỏ qua lỗi nếu môi trường không cho phép
-            }
+            
+            // Đảm bảo Laravel hiểu các link được tạo ra là HTTPS
+            $this->app['request']->server->set('HTTPS', true);
         }
 
-        // 4. ÉP NẠP CẤU HÌNH CLOUDINARY
-        config([
-            'cloudinary.cloud_url' => env('CLOUDINARY_URL')
-        ]);
+        // 3. CẤU HÌNH CLOUDINARY
+        // Ưu tiên nạp từ env trực tiếp để tránh lỗi cache config
+        if (env('CLOUDINARY_URL')) {
+            config([
+                'cloudinary.cloud_url' => env('CLOUDINARY_URL')
+            ]);
+        }
 
-        // 5. ĐĂNG KÝ DRIVER BREVO (Sửa lỗi Unsupported mail transport)
-        Mail::extend('brevo', function (array $config) {
-            return (new BrevoTransportFactory)->create(
-                new Dsn(
-                    'brevo+api',
-                    'default',
-                    env('BREVO_API_KEY')
-                )
-            );
-        });
+        // 4. ĐĂNG KÝ DRIVER BREVO (Sửa lỗi Unsupported mail transport)
+        if (env('BREVO_API_KEY')) {
+            Mail::extend('brevo', function (array $config) {
+                return (new BrevoTransportFactory)->create(
+                    new Dsn(
+                        'brevo+api',
+                        'default',
+                        null, // User không cần thiết cho Brevo API
+                        env('BREVO_API_KEY')
+                    )
+                );
+            });
+        }
     }
 }

@@ -7,17 +7,20 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Models\Review;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 
 class ProductController extends Controller
 {
-    /**
-     * 1. Hiển thị danh sách sản phẩm cho khách hàng
-     */
     public function index(Request $request)
     {
+        // Ép buộc Laravel tạo link HTTPS nếu đang chạy trên Render (tránh lỗi mất tham số khi redirect)
+        if (config('app.env') === 'production') {
+            URL::forceScheme('https');
+        }
+
         $query = Product::query()->with('category');
 
-        // Lọc theo Danh mục (Category)
+        // 1. Lọc theo Danh mục (Category)
         if ($request->filled('category')) {
             $category = Category::where('slug', $request->category)->first();
             if ($category) {
@@ -27,10 +30,8 @@ class ProductController extends Controller
 
         // 2. Lọc theo Phân loại (Classification)
         if ($request->filled('class')) {
-            // Giải mã URL (Quan trọng khi chạy trên Render/Linux)
             $cls = urldecode($request->class);
             
-            // Định nghĩa các nhóm phân loại
             $pureGroups = ['Tinh dầu nguyên chất', 'PURE OIL'];
             $blendGroups = [
                 'Hương liệu pha', 
@@ -39,7 +40,7 @@ class ProductController extends Controller
                 'Tinh dầu không nguyên chất'
             ];
 
-            // Dùng where(..., 'LIKE', ...) để tránh lỗi sai khác bảng mã ký tự trên Server
+            // Sử dụng LIKE %...% để khớp dữ liệu dù có khoảng trắng thừa
             if (in_array($cls, $pureGroups)) {
                 $query->whereIn('classification', $pureGroups);
             } 
@@ -47,49 +48,38 @@ class ProductController extends Controller
                 $query->whereIn('classification', $blendGroups);
             } 
             else {
-                $query->where('classification', 'LIKE', $cls);
+                $query->where('classification', 'LIKE', '%' . $cls . '%');
             }
         }
 
-        // Lọc theo từ khóa tìm kiếm (Search)
+        // 3. Lọc theo từ khóa tìm kiếm (Search)
         if ($request->filled('q')) {
             $searchTerm = $request->q;
             $query->where(function($q) use ($searchTerm) {
-                $q->where('name', 'like', '%' . $searchTerm . '%')
-                  ->orWhere('description', 'like', '%' . $searchTerm . '%');
+                $q->where('name', 'LIKE', '%' . $searchTerm . '%')
+                  ->orWhere('description', 'LIKE', '%' . $searchTerm . '%');
             });
         }
 
-        /**
-         * paginate(9)->withQueryString() 
-         * Giúp giữ lại ?class=...&page=... khi chuyển trang
-         */
+        // paginate(9) kết hợp withQueryString() để giữ tham số ?class=...&page=2
         $products = $query->latest()->paginate(9)->withQueryString();
+        
         $categories = Category::withCount('products')->get();
 
         return view('products.index', compact('products', 'categories'));
     }
 
-    /**
-     * Hỗ trợ Route category
-     */
     public function category(Request $request, Category $category)
     {
         $request->merge(['category' => $category->slug]);
         return $this->index($request);
     }
 
-    /**
-     * Hỗ trợ Route search
-     */
     public function search(Request $request)
     {
         return $this->index($request);
     }
 
-    /**
-     * 2. Hiển thị chi tiết một sản phẩm
-     */
     public function show($slug)
     {
         $product = Product::where('slug', $slug)->with(['category'])->firstOrFail();
@@ -123,9 +113,6 @@ class ProductController extends Controller
         return view('products.show', compact('product', 'relatedProducts', 'reviews', 'ratingCounts'));
     }
 
-    /**
-     * 3. Xử lý AJAX lọc đánh giá
-     */
     public function fetchReviews(Request $request, $id)
     {
         $query = Review::where('product_id', $id)
