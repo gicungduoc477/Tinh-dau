@@ -59,7 +59,6 @@ class OrderController extends Controller
         $targetStatuses = ['returning_confirmed', 'returning', 'refunding', 'returned'];
 
         $orders = Order::whereIn('status', $targetStatuses)
-                    ->where('payment_status', 'paid') 
                     ->latest()
                     ->paginate(15);
 
