@@ -13,7 +13,7 @@
                         <p class="text-muted">Chào mừng bạn quay trở lại với Nature Shop!</p>
                     </div>
 
-                    {{-- Thông báo thành công (Khi vừa reset mật khẩu hoặc đăng ký xong) --}}
+                    {{-- Thông báo thành công --}}
                     @if(session('message'))
                         <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm" role="alert">
                             <i class="fas fa-check-circle me-2"></i> {{ session('message') }}
@@ -39,7 +39,7 @@
                         {{-- Email hoặc Số điện thoại --}}
                         <div class="mb-3">
                             <label for="identifier" class="form-label fw-bold">Email hoặc Số điện thoại</label>
-                            <div class="input-group">
+                            <div class="input-group custom-input-group">
                                 <span class="input-group-text bg-light border-end-0"><i class="fas fa-user text-muted"></i></span>
                                 <input id="identifier" 
                                        name="identifier" 
@@ -55,17 +55,20 @@
                             @enderror
                         </div>
 
-                        {{-- Mật khẩu --}}
+                        {{-- Mật khẩu kèm mắt ẩn hiện --}}
                         <div class="mb-3">
                             <label for="password" class="form-label fw-bold">Mật khẩu</label>
-                            <div class="input-group">
+                            <div class="input-group custom-input-group">
                                 <span class="input-group-text bg-light border-end-0"><i class="fas fa-lock text-muted"></i></span>
                                 <input id="password" 
                                        name="password" 
                                        type="password" 
-                                       class="form-control border-start-0 @error('password') is-invalid @enderror" 
+                                       class="form-control border-start-0 border-end-0 @error('password') is-invalid @enderror" 
                                        placeholder="••••••••"
                                        required>
+                                <span class="input-group-text bg-light border-start-0 cursor-pointer" id="togglePassword">
+                                    <i class="fas fa-eye text-muted" id="eyeIcon"></i>
+                                </span>
                             </div>
                             @error('password')
                                 <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -119,11 +122,47 @@
     .text-success { color: #27ae60 !important; }
     .btn-success { background-color: #27ae60; border-color: #27ae60; transition: all 0.3s ease; }
     .btn-success:hover { background-color: #219150; border-color: #219150; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(39, 174, 96, 0.2); }
-    .form-control:focus { border-color: #27ae60; box-shadow: 0 0 0 0.2rem rgba(39, 174, 96, 0.15); }
+    
+    /* Tùy chỉnh hiệu ứng Focus cho Input Group */
+    .custom-input-group {
+        border-radius: 0.375rem;
+        transition: all 0.3s;
+    }
+    .custom-input-group .form-control:focus {
+        border-color: #ced4da; /* Reset mặc định */
+        box-shadow: none;
+    }
+    .custom-input-group:focus-within {
+        box-shadow: 0 0 0 0.2rem rgba(39, 174, 96, 0.15);
+        border-radius: 0.375rem;
+    }
+    .custom-input-group:focus-within .input-group-text,
+    .custom-input-group:focus-within .form-control {
+        border-color: #27ae60 !important;
+    }
+
     .hover-underline:hover { text-decoration: underline !important; }
     .transition-all { transition: all 0.3s; }
     .transition-all:hover { color: #27ae60 !important; }
     .card { border-radius: 15px; }
-    .input-group-text { border-right: none; }
+    .input-group-text { transition: all 0.3s; }
 </style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const togglePassword = document.querySelector('#togglePassword');
+        const passwordInput = document.querySelector('#password');
+        const eyeIcon = document.querySelector('#eyeIcon');
+
+        togglePassword.addEventListener('click', function () {
+            // Chuyển đổi loại input (password <-> text)
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            // Chuyển đổi icon
+            eyeIcon.classList.toggle('fa-eye');
+            eyeIcon.classList.toggle('fa-eye-slash');
+        });
+    });
+</script>
 @endsection

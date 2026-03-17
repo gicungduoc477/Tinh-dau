@@ -34,19 +34,12 @@ use App\Mail\WelcomeUserMail;
 
 /*
 |--------------------------------------------------------------------------
-| 1. FRONTEND ROUTES (Trang khách hàng công khai)
+| 1. FRONTEND ROUTES (Public)
 |--------------------------------------------------------------------------
 */
 Route::get('/', [FrontendProductController::class, 'index'])->name('home');
-
-// Trang giới thiệu & Liên hệ mới thêm
-Route::get('/ve-chung-toi', function () {
-    return view('pages.about');
-})->name('about');
-
-Route::get('/lien-he', function () {
-    return view('pages.contact');
-})->name('contact');
+Route::get('/ve-chung-toi', fn() => view('pages.about'))->name('about');
+Route::get('/lien-he', fn() => view('pages.contact'))->name('contact');
 
 Route::controller(FrontendProductController::class)->group(function () {
     Route::get('/products', 'index')->name('products.index');
@@ -69,11 +62,12 @@ Route::controller(FrontendCheckoutController::class)->group(function () {
     Route::get('/checkout/success', 'success')->name('checkout.success');
 });
 
+// Xem đơn hàng (Cho cả khách và user)
 Route::get('/orders/{id}', [FrontendOrderController::class, 'show'])->name('orders.show');
 
 /*
 |--------------------------------------------------------------------------
-| 2. USER AUTHENTICATION (Khách chưa đăng nhập)
+| 2. GUEST AUTHENTICATION
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest')->group(function () {
@@ -92,30 +86,58 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 3. AUTH REQUIRED ROUTES (Phải đăng nhập)
+| 3. AUTH REQUIRED ROUTES (Khách hàng đã đăng nhập)
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     
-    Route::group(['prefix' => 'profile', 'as' => 'profile.', 'controller' => ProfileController::class], function () {
-        Route::get('/', 'edit')->name('index');   
-        Route::get('/edit', 'edit')->name('edit'); 
-        Route::patch('/', 'update')->name('update');
-        Route::delete('/', 'destroy')->name('destroy');
-    });
+    // Profile
+Route::group(['prefix' => 'profile', 'as' => 'profile.', 'controller' => ProfileController::class], function () {
+    Route::get('/', 'edit')->name('index');   
+    Route::get('/edit', 'edit')->name('edit'); 
+    Route::patch('/', 'update')->name('update');
+    Route::delete('/', 'destroy')->name('destroy');
+    
+    // THÊM DÒNG NÀY ĐỂ FIX LỖI:
+    Route::put('/password', 'updatePassword')->name('password'); 
+});
 
+    // Orders Actions
     Route::group(['prefix' => 'orders', 'as' => 'orders.', 'controller' => FrontendOrderController::class], function () {
         Route::get('/', 'index')->name('index');
         Route::post('/{id}/cancel', 'cancel')->name('cancel'); 
         Route::post('/{id}/return', 'requestReturn')->name('requestReturn');
     });
 
-    // Route Đánh giá (Review)
+    // Reviews (Đánh giá sản phẩm)
     Route::controller(FrontendReviewController::class)->group(function () {
         Route::get('/my-reviews', 'index')->name('reviews.index'); 
         Route::get('/reviews/create/{product_id}/{order_id?}', 'create')->name('reviews.create'); 
         Route::post('/reviews/store', 'store')->name('reviews.store'); 
+    });
+
+    // --- CẬP NHẬT: NOTIFICATIONS (Chuông thông báo) ---
+    Route::group(['prefix' => 'notifications', 'as' => 'notifications.'], function () {
+        // Click vào thông báo: Đánh dấu đã đọc & Chuyển hướng
+        Route::get('/read/{id}', function($id) {
+            $notification = auth()->user()->notifications()->findOrFail($id);
+            $notification->markAsRead();
+            
+            // Lấy URL từ data của notification, nếu không có thì về trang chủ
+            $url = $notification->data['url'] ?? route('home');
+            return redirect($url);
+        })->name('readAndRedirect');
+
+        Route::post('/mark-as-read/{id}', function($id) {
+            auth()->user()->notifications()->findOrFail($id)->markAsRead();
+            return back();
+        })->name('markRead');
+
+        Route::post('/mark-all-as-read', function() {
+            auth()->user()->unreadNotifications->markAsRead();
+            return back()->with('success', 'Đã đánh dấu tất cả là đã đọc.');
+        })->name('markAllRead');
     });
 });
 
@@ -125,26 +147,27 @@ Route::middleware('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('admin')->name('admin.')->group(function () {
-    
     Route::middleware('guest')->group(function () {
         Route::get('/login', [AdminAuthController::class, 'showLogin'])->name('login');
         Route::post('/login', [AdminAuthController::class, 'login']);
     });
 
     Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->group(function () {
-        
         Route::get('/', fn() => redirect()->route('admin.dashboard'));
 
+        // Dashboard Logic
         Route::get('/dashboard', function () {
             $products = Product::latest()->paginate(8);
             $users_count = User::count();
             $recent_users = User::latest()->take(5)->get();
             
-            $paidStatuses = ['paid', 'Paid', 'Đã thanh toán'];
-            $excludedStatuses = ['canceled', 'cancelled', 'refunded', 'returned'];
+            $paidStatuses = ['paid', 'Paid', 'đã thanh toán', 'Đã thanh toán', 'completed', 'delivered', 'success', 'Thành công'];
+            $excludedStatuses = ['canceled', 'cancelled', 'refunded', 'returned', 'bị hủy'];
 
-            $revenueQuery = Order::whereIn('payment_status', $paidStatuses)
-                                 ->whereNotIn('status', $excludedStatuses);
+            $revenueQuery = Order::where(function($q) use ($paidStatuses) {
+                $q->whereIn('payment_status', $paidStatuses)
+                  ->orWhereIn(DB::raw('LOWER(status)'), ['success', 'completed', 'delivered', 'thành công']);
+            })->whereNotIn('status', $excludedStatuses);
 
             $total_revenue = (clone $revenueQuery)->sum('total_price');
 
@@ -165,6 +188,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('product', AdminProductController::class);
         Route::resource('users', AdminUserController::class);
 
+        // Quản lý đơn hàng Admin
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'controller' => AdminOrderController::class], function () {
             Route::get('/', 'index')->name('index');
             Route::get('/refunds', 'refundList')->name('refunds'); 
@@ -173,6 +197,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', 'destroy')->name('destroy'); 
         });
 
+        // Quản lý Review Admin
         Route::group(['prefix' => 'reviews', 'as' => 'reviews.', 'controller' => AdminReviewController::class], function () {
             Route::get('/index', 'index')->name('index');
             Route::post('/{id}/toggle', 'toggle')->name('toggle'); 
@@ -189,7 +214,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 5. THANH TOÁN & TOOLS
+| 5. PAYMENT & SYSTEM
 |--------------------------------------------------------------------------
 */
 Route::controller(PaymentController::class)->group(function () {
@@ -199,26 +224,12 @@ Route::controller(PaymentController::class)->group(function () {
     Route::post('/payment/webhook', 'handleWebhook')->name('payment.webhook');
 });
 
-/**
- * HỆ THỐNG FIX LỖI TỰ ĐỘNG
- */
 Route::get('/fix-system', function () {
     try {
-        DB::table('carts')->delete(); 
-        DB::table('products')->update(['stock' => 20]);
-
-        Artisan::call('config:clear');
-        Artisan::call('cache:clear');
-        Artisan::call('view:clear');
-        Artisan::call('route:clear');
-
-        return "<h3>FIX HỆ THỐNG THÀNH CÔNG!</h3>
-                <p>1. Giỏ hàng đã về 0.</p>
-                <p>2. Tồn kho sản phẩm đã reset về 20.</p>
-                <p>3. Đã làm mới toàn bộ Cache.</p>
-                <a href='/admin/dashboard' style='padding:10px; background:blue; color:white; text-decoration:none; border-radius:5px;'>VỀ DASHBOARD</a>";
+        Artisan::call('optimize:clear');
+        return "<h3>HỆ THỐNG ĐÃ RESET CACHE THÀNH CÔNG!</h3><a href='/'>Về trang chủ</a>";
     } catch (\Exception $e) {
-        return "<h3>Có lỗi xảy ra:</h3><p>" . $e->getMessage() . "</p>";
+        return "Lỗi: " . $e->getMessage();
     }
 });
 

@@ -181,38 +181,27 @@
                 </div>
 
                 {{-- 3. XỬ LÝ HIỂN THỊ MEDIA (ẢNH & VIDEO) --}}
-                @if($review->image)
-                    @php
-                        $revMedia = trim($review->image);
-                        // Tạo URL tuyệt đối
-                        if (filter_var($revMedia, FILTER_VALIDATE_URL)) {
-                            $mediaSrc = $revMedia;
-                        } else {
-                            $mediaSrc = str_contains($revMedia, 'storage/') ? asset($revMedia) : asset('storage/' . $revMedia);
-                        }
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    {{-- Hiển thị Ảnh --}}
+                    @if($review->image_url && !str_contains($review->image_url, 'no-image'))
+                        <a href="{{ $review->image_url }}" target="_blank" class="d-inline-block">
+                            <img src="{{ $review->image_url }}" 
+                                 class="review-img-thumb" 
+                                 style="width: 100px; height: 100px;"
+                                 onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=Lỗi+Ảnh';">
+                        </a>
+                    @endif
 
-                        // Kiểm tra đuôi file để xác định là video hay ảnh
-                        $extension = strtolower(pathinfo($mediaSrc, PATHINFO_EXTENSION));
-                        $isVideo = in_array($extension, ['mp4', 'mov', 'webm', 'ogg']);
-                    @endphp
-
-                    <div class="review-media-wrapper">
-                        @if($isVideo)
-                            {{-- Giao diện hiển thị Video --}}
+                    {{-- Hiển thị Video --}}
+                    @if($review->video_url)
+                        <div class="review-media-wrapper">
                             <video class="review-video-thumb" style="width: 150px; height: 150px; cursor: pointer;" controls>
-                                <source src="{{ $mediaSrc }}" type="video/{{ $extension == 'mov' ? 'mp4' : $extension }}">
+                                <source src="{{ $review->video_url }}" type="video/mp4">
+                                Trình duyệt của bạn không hỗ trợ video.
                             </video>
-                        @else
-                            {{-- Giao diện hiển thị Ảnh --}}
-                            <a href="{{ $mediaSrc }}" target="_blank" class="d-inline-block">
-                                <img src="{{ $mediaSrc }}" 
-                                     class="review-img-thumb" 
-                                     style="width: 100px; height: 100px;"
-                                     onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=No+Image';">
-                            </a>
-                        @endif
-                    </div>
-                @endif
+                        </div>
+                    @endif
+                </div>
 
                 {{-- Shop Reply --}}
                 @if($review->reply)

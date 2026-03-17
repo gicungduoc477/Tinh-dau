@@ -259,9 +259,10 @@
                             <div class="d-flex flex-wrap gap-2 align-items-center">
                                 <span class="fw-bold me-2 small text-uppercase text-muted">Lọc đánh giá:</span>
                                 <button class="filter-btn active" data-rating="" data-image="false">Tất cả</button>
-                                <button class="filter-btn" data-rating="" data-image="true"><i class="bi bi-camera me-1"></i> Có hình ảnh</button>
+                                <button class="filter-btn" data-rating="" data-image="true" data-video="false"><i class="bi bi-camera me-1"></i> Có hình ảnh</button>
+                                <button class="filter-btn" data-rating="" data-image="false" data-video="true"><i class="bi bi-camera-reels me-1"></i> Có video</button>
                                 @foreach([5, 4, 3, 2, 1] as $star)
-                                    <button class="filter-btn" data-rating="{{ $star }}" data-image="false">{{ $star }} <i class="bi bi-star-fill text-warning ms-1" style="font-size: 0.7rem"></i></button>
+                                    <button class="filter-btn" data-rating="{{ $star }}" data-image="false" data-video="false">{{ $star }} <i class="bi bi-star-fill text-warning ms-1" style="font-size: 0.7rem"></i></button>
                                 @endforeach
                             </div>
                         </div>
@@ -313,13 +314,14 @@
             const activeBtn = $('.filter-btn.active');
             const rating = activeBtn.data('rating');
             const hasImage = activeBtn.data('image');
+            const hasVideo = activeBtn.data('video');
 
             $('.loading-overlay').css('display', 'flex');
             
             $.ajax({
                 url: "{{ route('products.fetch_reviews', $product->id) }}",
                 method: "GET",
-                data: { page: page, rating: rating, has_image: hasImage },
+                data: { page: page, rating: rating, has_image: hasImage, has_video: hasVideo },
                 success: function(data) {
                     $('#review-list-wrapper').html(data);
                     $('.loading-overlay').hide();

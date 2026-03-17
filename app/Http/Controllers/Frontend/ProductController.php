@@ -58,13 +58,14 @@ class ProductController extends Controller
 
         // Lấy số lượng đánh giá theo từng loại sao để hiển thị lên nút lọc
         $ratingCounts = [
-            'all'   => Review::where('product_id', $product->id)->where('status', 'active')->count(),
+            'all'       => Review::where('product_id', $product->id)->where('status', 'active')->count(),
             'has_image' => Review::where('product_id', $product->id)->where('status', 'active')->whereNotNull('image')->count(),
-            '5_star' => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 5)->count(),
-            '4_star' => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 4)->count(),
-            '3_star' => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 3)->count(),
-            '2_star' => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 2)->count(),
-            '1_star' => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 1)->count(),
+            'has_video' => Review::where('product_id', $product->id)->where('status', 'active')->whereNotNull('video')->count(),
+            '5_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 5)->count(),
+            '4_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 4)->count(),
+            '3_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 3)->count(),
+            '2_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 2)->count(),
+            '1_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 1)->count(),
         ];
 
         $relatedProducts = Product::where('category_id', $product->category_id)
@@ -90,9 +91,14 @@ class ProductController extends Controller
             $query->where('rating', $request->rating);
         }
 
-        // MỚI: Lọc chỉ những đánh giá có hình ảnh
-        if ($request->has('has_image') && $request->has_image == 'true') {
+        // Lọc chỉ những đánh giá có hình ảnh
+        if ($request->boolean('has_image')) {
             $query->whereNotNull('image');
+        }
+
+        // Lọc chỉ những đánh giá có video
+        if ($request->boolean('has_video')) {
+            $query->whereNotNull('video');
         }
 
         // Lấy dữ liệu và giữ lại các tham số trên URL (giúp phân trang đúng khi đang lọc)

@@ -150,7 +150,7 @@
                             </td>
                             <td>
                                 {{-- Hiển thị Tags (Câu trả lời có sẵn) --}}
-                                @if($review->tags && count($review->tags) > 0)
+                                @if(is_array($review->tags) && count($review->tags) > 0)
                                     <div class="mb-2">
                                         @foreach($review->tags as $tag)
                                             <span class="review-tag">#{{ $tag }}</span>

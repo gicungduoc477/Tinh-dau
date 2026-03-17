@@ -44,11 +44,7 @@
             display: flex;
             align-items: center;
         }
-        .navbar-brand i { 
-            color: var(--primary-color); 
-            font-size: 1.8rem;
-            filter: drop-shadow(0 2px 4px rgba(39, 174, 96, 0.2));
-        }
+        .navbar-brand i { color: var(--primary-color); font-size: 1.8rem; filter: drop-shadow(0 2px 4px rgba(39, 174, 96, 0.2)); }
         .navbar-brand span { color: var(--primary-color); }
 
         .nav-link { 
@@ -83,6 +79,13 @@
             border: 2px solid #fff; 
             box-shadow: 0 2px 5px rgba(255, 71, 87, 0.3);
         }
+
+        /* --- Notification Styles --- */
+        .notification-item { border-bottom: 1px solid #f1f1f1; transition: 0.2s; cursor: pointer; }
+        .notification-item:last-child { border-bottom: none; }
+        .notification-item.unread { background-color: #f0fff4; border-left: 3px solid var(--primary-color); }
+        .notification-item:hover { background-color: #f8f9fa; }
+        #noti-badge { font-size: 0.65rem; padding: 3px 6px; }
 
         /* --- Footer Styles --- */
         .footer-section { margin-top: 100px; position: relative; }
@@ -119,7 +122,6 @@
 
         .footer-subscribe .input-group { background: rgba(255,255,255,0.08); backdrop-filter: blur(8px); border-radius: 12px; padding: 6px; border: 1px solid rgba(255,255,255,0.15); }
         .footer-subscribe .form-control { background: transparent !important; border: none; color: white !important; box-shadow: none; }
-        .footer-subscribe .form-control::placeholder { color: rgba(255,255,255,0.4); }
 
         .btn-subscribe { background-color: var(--primary-color) !important; color: #fff !important; font-weight: 700 !important; border-radius: 10px !important; padding: 10px 25px !important; border: none; }
         .btn-subscribe:hover { background: var(--accent-yellow) !important; color: #000 !important; transform: scale(1.02); }
@@ -135,10 +137,7 @@
         .copyright-border { border-top: 1px solid rgba(255,255,255,0.1); margin-top: 70px; padding-top: 30px; }
 
         /* --- Floating Contact & Back to Top --- */
-        .sticky-tools {
-            position: fixed; bottom: 25px; right: 25px; z-index: 1000;
-            display: flex; flex-direction: column; gap: 12px;
-        }
+        .sticky-tools { position: fixed; bottom: 25px; right: 25px; z-index: 1000; display: flex; flex-direction: column; gap: 12px; }
         .tool-item {
             width: 50px; height: 50px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
@@ -197,13 +196,49 @@
 
                 @auth
                     <li class="nav-item dropdown me-3">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-bell fs-4 text-dark"></i>
+                            @php $unreadCount = auth()->user()->unreadNotifications->count(); @endphp
+                            @if($unreadCount > 0)
+                                <span id="noti-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                    {{ $unreadCount }}
+                                </span>
+                            @endif
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-3 animate__animated animate__fadeIn">
-                            <li class="dropdown-header">Thông báo mới</li>
-                            <li><a class="dropdown-item text-center small text-muted" href="#">Không có thông báo mới</a></li>
-                        </ul>
+                        <div class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-3 animate__animated animate__fadeIn" style="width: 340px; max-height: 450px; overflow-y: auto;">
+                            <div class="dropdown-header d-flex justify-content-between align-items-center py-2 border-bottom sticky-top bg-white">
+                                <span class="fw-bold text-dark">Thông báo</span>
+                                @if($unreadCount > 0)
+                                    <button id="btn-mark-all-read" class="btn btn-link btn-sm text-primary p-0 text-decoration-none" style="font-size: 0.8rem;">Đã đọc tất cả</button>
+                                @endif
+                            </div>
+                            <div id="noti-list">
+                                @forelse(auth()->user()->notifications->take(15) as $noti)
+                                    <div class="dropdown-item notification-item p-3 {{ $noti->read_at ? '' : 'unread' }}" 
+                                         onclick="markAsRead('{{ $noti->id }}', '{{ $noti->data['url'] ?? route('orders.index') }}')">
+                                        <div class="d-flex align-items-start">
+                                            <div class="flex-shrink-0 bg-success bg-opacity-10 p-2 rounded-circle me-3">
+                                                <i class="bi bi-box-seam text-success"></i>
+                                            </div>
+                                            <div class="w-100">
+                                                <p class="mb-0 small text-wrap text-dark fw-medium" style="line-height: 1.4;">{{ $noti->data['message'] ?? 'Cập nhật đơn hàng' }}</p>
+                                                <div class="d-flex justify-content-between align-items-center mt-1">
+                                                    <small class="text-muted" style="font-size: 0.7rem;">{{ $noti->created_at->diffForHumans() }}</small>
+                                                    @if(isset($noti->data['total']))
+                                                        <span class="badge bg-light text-dark border fw-normal" style="font-size: 0.65rem;">{{ $noti->data['total'] }}</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="py-5 text-center">
+                                        <i class="bi bi-bell-slash fs-2 text-muted opacity-25"></i>
+                                        <p class="small text-muted mt-2 mb-0">Không có thông báo nào</p>
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
                     </li>
 
                     <li class="nav-item dropdown">
@@ -218,6 +253,7 @@
                                 <li><a class="dropdown-item py-2" href="{{ route('admin.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>Quản trị</a></li>
                             @endif
                             <li><a class="dropdown-item py-2" href="{{ route('profile.index') }}"><i class="bi bi-person-circle me-2"></i>Hồ sơ</a></li>
+                            <li><a class="dropdown-item py-2" href="{{ route('orders.index') }}"><i class="bi bi-list-check me-2"></i>Đơn hàng của tôi</a></li>
                             <li><a class="dropdown-item py-2" href="{{ route('reviews.index') }}"><i class="bi bi-star-fill text-warning me-2"></i>Đánh giá của tôi</a></li>
                             <li><hr class="dropdown-divider opacity-50"></li>
                             <li>
@@ -241,7 +277,6 @@
     @yield('content')
 </main>
 
-{{-- Sticky Tools --}}
 <div class="sticky-tools">
     <a href="#" class="tool-item back-to-top" id="backToTop" title="Lên đầu trang">
         <i class="bi bi-chevron-up"></i>
@@ -262,7 +297,7 @@
         <div class="container text-center fw-bold">
             <div class="row">
                 <a href="tel:+84395422569" class="col-md-4 contact-item mb-3 mb-md-0">
-                    <i class="bi bi-telephone-plus-fill fs-4"></i> <span>HỖ TRỢ: +84 123 456 789</span>
+                    <i class="bi bi-telephone-plus-fill fs-4"></i> <span>HỖ TRỢ: +84 395 422 569</span>
                 </a>
                 <a href="mailto:vanhieubui403@gmail.com" class="col-md-4 contact-item mb-3 mb-md-0">
                     <i class="bi bi-envelope-heart-fill fs-4"></i> <span>EMAIL: hello@natureshop.vn</span>
@@ -289,7 +324,7 @@
                 <div class="col-lg-2 col-md-6">
                     <h5 class="footer-title">Sản Phẩm</h5>
                     <ul class="list-unstyled">
-                        <li><a href="#" class="footer-link">Tinh dầu nguyên chất</a></li>
+                        <li><a href="{{ route('products.index') }}" class="footer-link">Sản phẩm mới</a></li>
                         <li><a href="#" class="footer-link">Máy khuếch tán</a></li>
                     </ul>
                 </div>
@@ -334,27 +369,61 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Xử lý Back to Top và hiển thị Icon
-    const backToTop = document.getElementById('backToTop');
-    window.onscroll = function() {
-        if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
-            backToTop.classList.add('show');
-        } else {
-            backToTop.classList.remove('show');
-        }
-    };
-
-    backToTop.onclick = function(e) {
-        e.preventDefault();
-        window.scrollTo({top: 0, behavior: 'smooth'});
-    };
+    // --- Xử lý Thông báo ---
+    function markAsRead(id, url) {
+        // CẬP NHẬT: Ưu tiên Route trung gian để xử lý redirect mượt mà hơn
+        let routeUrl = "{{ route('notifications.readAndRedirect', ':id') }}".replace(':id', id);
+        window.location.href = routeUrl;
+    }
 
     document.addEventListener('DOMContentLoaded', function() {
+        // Xử lý Toast
         var toastElements = [].slice.call(document.querySelectorAll('.toast'));
         toastElements.forEach(function(toastEl) {
             var bsToast = new bootstrap.Toast(toastEl, { autohide: true, delay: 4000 });
             bsToast.show();
         });
+
+        // Xử lý Mark All Read bằng AJAX
+        const btnMarkAll = document.getElementById('btn-mark-all-read');
+        if (btnMarkAll) {
+            btnMarkAll.addEventListener('click', function(e) {
+                e.preventDefault();
+                fetch("{{ route('notifications.markAllRead') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        const badge = document.getElementById('noti-badge');
+                        if (badge) badge.remove();
+                        document.querySelectorAll('.notification-item.unread').forEach(item => {
+                            item.classList.remove('unread');
+                        });
+                        btnMarkAll.fadeOut(); // Ẩn nút sau khi hoàn tất
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        }
+
+        // Back to Top logic
+        const backToTop = document.getElementById('backToTop');
+        window.onscroll = function() {
+            if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+                backToTop.classList.add('show');
+            } else {
+                backToTop.classList.remove('show');
+            }
+        };
+        backToTop.onclick = function(e) {
+            e.preventDefault();
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        };
     });
 </script>
 @stack('scripts')

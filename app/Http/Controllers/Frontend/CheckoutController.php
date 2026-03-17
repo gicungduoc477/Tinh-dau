@@ -8,11 +8,17 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+
+// Models
 use App\Models\Cart;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\OrderStatusHistory;
+use App\Models\User;
+
+// Notifications & Mail
+use App\Notifications\OrderPlacedNotification;
 use App\Mail\OrderPlacedMail;
 
 class CheckoutController extends Controller
@@ -75,6 +81,7 @@ class CheckoutController extends Controller
         $items = [];
         $totalOrder = 0;
 
+        // 1. Lấy thông tin giỏ hàng (DB hoặc Session)
         if (Auth::check()) {
             $dbCart = Cart::where('user_id', Auth::id())->with('product')->get();
             foreach ($dbCart as $c) {
@@ -103,12 +110,14 @@ class CheckoutController extends Controller
             return redirect()->back()->with('error', 'Giỏ hàng của bạn đang rỗng.');
         }
 
+        // 2. Tính phí vận chuyển
         $shippingMethod = $request->input('shipping_method', 'standard');
         $shippingFee = $shippingMethod === 'express' ? 20000 : 0;
         $totalWithShipping = $totalOrder + $shippingFee;
 
         DB::beginTransaction();
         try {
+            // 3. Tạo đơn hàng chính
             $order = Order::create([
                 'user_id'          => Auth::id(),
                 'order_code'       => 'ORD-' . strtoupper(uniqid()),
@@ -124,6 +133,7 @@ class CheckoutController extends Controller
                 'payment_status'   => 'unpaid',
             ]);
 
+            // 4. Tạo chi tiết đơn hàng & Trừ kho
             foreach ($items as $it) {
                 OrderItem::create([
                     'order_id'   => $order->id,
@@ -141,6 +151,7 @@ class CheckoutController extends Controller
                 }
             }
 
+            // 5. Ghi lại lịch sử trạng thái
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => null,
@@ -149,16 +160,32 @@ class CheckoutController extends Controller
                 'note'        => 'Khách hàng đặt hàng thành công (Hình thức: ' . strtoupper($request->payment_method) . ')',
             ]);
 
+            // --- 6. HỆ THỐNG THÔNG BÁO (NOTIFICATIONS) ---
+            
+            // A. Thông báo cho Khách hàng (Nếu có tài khoản)
+            if (Auth::check()) {
+                Auth::user()->notify(new OrderPlacedNotification($order));
+            }
+
+            // B. Thông báo cho Quản trị viên (Để Admin biết có đơn hàng mới)
+            $admin = User::where('role', 'admin')->first();
+            if ($admin) {
+                $admin->notify(new OrderPlacedNotification($order));
+            }
+
+            // 7. Dọn dẹp giỏ hàng
             if (Auth::check()) {
                 Cart::where('user_id', Auth::id())->delete();
             } else {
                 session()->forget('cart');
             }
             
+            // Lưu đơn hàng vào session để trang success hiển thị
             session(['guest_order_id' => $order->id]);
 
             DB::commit();
 
+            // 8. Gửi Email xác nhận (Đặt ngoài Transaction để không rollback nếu lỗi mail server)
             try {
                 if ($order->customer_email) {
                     Mail::to($order->customer_email)->send(new OrderPlacedMail($order));
@@ -184,6 +211,7 @@ class CheckoutController extends Controller
         $orderId = session('guest_order_id');
         $order = $orderId ? Order::with('items.product')->find($orderId) : null;
         
+        // Nếu session mất (F5), cố gắng lấy đơn hàng mới nhất của User
         if (!$order && Auth::check()) {
             $order = Order::where('user_id', Auth::id())->latest()->first();
         }
@@ -192,13 +220,12 @@ class CheckoutController extends Controller
             return redirect()->route('home');
         }
 
-        // --- CẤU HÌNH NGÂN HÀNG ---
-        $bank = "vcb"; // Ngân hàng (vcb, mbb, tcb...)
-        $stk = "123456789"; // Thay bằng Số tài khoản của Hiếu
+        // --- CẤU HÌNH NGÂN HÀNG VIETQR ---
+        $bank   = "vcb"; // Vietcombank
+        $stk    = "123456789"; // Thay bằng STK thật của bạn
         $amount = (int)$order->total_price;
-        $memo = "NatureShop" . $order->id;
+        $memo   = "NatureShop" . $order->order_code;
 
-        // Tạo link ảnh QR
         $qrImageUrl = "https://img.vietqr.io/image/{$bank}-{$stk}-compact2.jpg?amount={$amount}&addInfo={$memo}";
 
         return view('checkout.success', compact('order', 'qrImageUrl'));

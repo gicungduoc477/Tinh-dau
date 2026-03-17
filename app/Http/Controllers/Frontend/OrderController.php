@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
-use Carbon\Carbon; // Bổ sung Carbon để xử lý thời gian
+use App\Notifications\OrderPlacedNotification; // Import Notification
+use Carbon\Carbon;
 
 class OrderController extends Controller
 {
@@ -74,7 +75,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Khách hàng gửi yêu cầu Khiếu nại / Trả hàng (GIỮ NGUYÊN LOGIC ẢNH)
+     * Khách hàng gửi yêu cầu Khiếu nại / Trả hàng
      */
     public function requestReturn(Request $request, $id)
     {
@@ -104,14 +105,14 @@ class OrderController extends Controller
 
             $imagePath = null;
             if ($request->hasFile('return_image')) {
-                // Giữ nguyên đường dẫn lưu trữ returns trong public
                 $imagePath = $request->file('return_image')->store('returns', 'public');
             }
 
             $oldStatus = $order->status;
+            $newStatus = 'returning';
             
             $order->update([
-                'status'         => 'returning',
+                'status'         => $newStatus,
                 'return_reason'  => $request->return_reason,
                 'return_image'   => $imagePath,
                 'return_note'    => $request->return_note,
@@ -123,13 +124,16 @@ class OrderController extends Controller
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => $oldStatus,
-                'to_status'   => 'returning',
+                'to_status'   => $newStatus,
                 'user_id'     => Auth::id(),
                 'note'        => 'Khách yêu cầu hoàn tiền về: ' . $request->bank_name . ' - STK: ' . $request->account_number,
             ]);
 
+            // GỬI THÔNG BÁO CHO KHÁCH HÀNG (Hiển thị ở chuông)
+            Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
+
             DB::commit();
-            return back()->with('success', 'Yêu cầu trả hàng đã được gửi thành công. Shop sẽ kiểm tra STK và phản hồi sớm nhất.');
+            return back()->with('success', 'Yêu cầu trả hàng đã được gửi thành công. Shop sẽ kiểm tra và phản hồi sớm nhất.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -149,7 +153,8 @@ class OrderController extends Controller
         DB::beginTransaction();
         try {
             $oldStatus = $order->status;
-            $order->status = 'canceled';
+            $newStatus = 'canceled';
+            $order->status = $newStatus;
             $order->save();
 
             foreach ($order->items as $item) {
@@ -161,10 +166,13 @@ class OrderController extends Controller
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => $oldStatus,
-                'to_status'   => 'canceled',
+                'to_status'   => $newStatus,
                 'user_id'     => Auth::id(),
                 'note'        => $request->note ?? 'Khách hàng chủ động hủy đơn hàng.',
             ]);
+
+            // GỬI THÔNG BÁO CHO KHÁCH HÀNG (Hiển thị ở chuông)
+            Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
 
             DB::commit();
             return back()->with('success', 'Đơn hàng đã được hủy thành công.');
