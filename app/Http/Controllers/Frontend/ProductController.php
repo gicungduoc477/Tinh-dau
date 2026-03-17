@@ -25,11 +25,12 @@ class ProductController extends Controller
             }
         }
 
-        // 2. Lọc theo Phân loại (Classification) - Tối ưu hóa logic nhóm
+        // 2. Lọc theo Phân loại (Classification)
         if ($request->filled('class')) {
-            $cls = $request->class;
+            // Giải mã URL (Quan trọng khi chạy trên Render/Linux)
+            $cls = urldecode($request->class);
             
-            // Định nghĩa các nhóm phân loại để dễ quản lý
+            // Định nghĩa các nhóm phân loại
             $pureGroups = ['Tinh dầu nguyên chất', 'PURE OIL'];
             $blendGroups = [
                 'Hương liệu pha', 
@@ -38,6 +39,7 @@ class ProductController extends Controller
                 'Tinh dầu không nguyên chất'
             ];
 
+            // Dùng where(..., 'LIKE', ...) để tránh lỗi sai khác bảng mã ký tự trên Server
             if (in_array($cls, $pureGroups)) {
                 $query->whereIn('classification', $pureGroups);
             } 
@@ -45,8 +47,7 @@ class ProductController extends Controller
                 $query->whereIn('classification', $blendGroups);
             } 
             else {
-                // Tìm kiếm chính xác nếu không rơi vào các nhóm trên
-                $query->where('classification', $cls);
+                $query->where('classification', 'LIKE', $cls);
             }
         }
 
@@ -60,8 +61,8 @@ class ProductController extends Controller
         }
 
         /**
-         * QUAN TRỌNG: paginate(9)->withQueryString() 
-         * Giúp giữ lại các tham số ?class=...&category=... khi bấm sang trang 2, 3
+         * paginate(9)->withQueryString() 
+         * Giúp giữ lại ?class=...&page=... khi chuyển trang
          */
         $products = $query->latest()->paginate(9)->withQueryString();
         $categories = Category::withCount('products')->get();
@@ -93,7 +94,6 @@ class ProductController extends Controller
     {
         $product = Product::where('slug', $slug)->with(['category'])->firstOrFail();
 
-        // Lấy danh sách đánh giá đã duyệt
         $reviews = Review::where('product_id', $product->id)
             ->where('status', 'active')
             ->with('user')
@@ -101,7 +101,6 @@ class ProductController extends Controller
             ->paginate(5)
             ->withQueryString();
 
-        // Thống kê đánh giá (Dùng chung 1 biến $id để query nhanh hơn)
         $pId = $product->id;
         $baseReview = Review::where('product_id', $pId)->where('status', 'active');
 
@@ -145,7 +144,6 @@ class ProductController extends Controller
             $query->whereNotNull('video');
         }
 
-        // withQueryString() cực kỳ quan trọng cho phân trang AJAX
         $reviews = $query->latest()->paginate(5)->withQueryString();
 
         return view('products._review_list', compact('reviews'))->render();
