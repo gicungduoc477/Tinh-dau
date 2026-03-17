@@ -11,16 +11,19 @@ use Illuminate\Support\Facades\URL;
 
 class ProductController extends Controller
 {
+    /**
+     * 1. Hiển thị danh sách sản phẩm cho khách hàng
+     */
     public function index(Request $request)
     {
-        // Ép buộc Laravel tạo link HTTPS nếu đang chạy trên Render (tránh lỗi mất tham số khi redirect)
+        // Ép buộc Laravel tạo link HTTPS nếu đang chạy trên Render
         if (config('app.env') === 'production') {
             URL::forceScheme('https');
         }
 
         $query = Product::query()->with('category');
 
-        // 1. Lọc theo Danh mục (Category)
+        // --- Lọc theo Danh mục (Category Slug) ---
         if ($request->filled('category')) {
             $category = Category::where('slug', $request->category)->first();
             if ($category) {
@@ -28,31 +31,20 @@ class ProductController extends Controller
             }
         }
 
-        // 2. Lọc theo Phân loại (Classification)
+        // --- Lọc theo Phân loại (Classification) - ĐÃ CẬP NHẬT RÕ RÀNG ---
         if ($request->filled('class')) {
             $cls = urldecode($request->class);
             
-            $pureGroups = ['Tinh dầu nguyên chất', 'PURE OIL'];
-            $blendGroups = [
-                'Hương liệu pha', 
-                'FRAGRANCE', 
-                'Tinh dầu hỗn hợp (Blend Oil)', 
-                'Tinh dầu không nguyên chất'
-            ];
-
-            // Sử dụng LIKE %...% để khớp dữ liệu dù có khoảng trắng thừa
-            if (in_array($cls, $pureGroups)) {
-                $query->whereIn('classification', $pureGroups);
-            } 
-            elseif (in_array($cls, $blendGroups)) {
-                $query->whereIn('classification', $blendGroups);
-            } 
-            else {
-                $query->where('classification', 'LIKE', '%' . $cls . '%');
-            }
+            /**
+             * Thay vì dùng whereIn để nhóm, chúng ta dùng so sánh trực tiếp.
+             * Điều này đảm bảo:
+             * - Bấm "Hương liệu pha" -> Chỉ ra Hương liệu pha.
+             * - Bấm "Tinh dầu hỗn hợp" -> Chỉ ra Tinh dầu hỗn hợp.
+             */
+            $query->where('classification', 'LIKE', $cls);
         }
 
-        // 3. Lọc theo từ khóa tìm kiếm (Search)
+        // --- Lọc theo từ khóa tìm kiếm (Search) ---
         if ($request->filled('q')) {
             $searchTerm = $request->q;
             $query->where(function($q) use ($searchTerm) {
@@ -61,7 +53,10 @@ class ProductController extends Controller
             });
         }
 
-        // paginate(9) kết hợp withQueryString() để giữ tham số ?class=...&page=2
+        /**
+         * paginate(9) kết hợp withQueryString() 
+         * Cực kỳ quan trọng để giữ tham số ?class=... khi sang trang 2, 3
+         */
         $products = $query->latest()->paginate(9)->withQueryString();
         
         $categories = Category::withCount('products')->get();
@@ -69,21 +64,31 @@ class ProductController extends Controller
         return view('products.index', compact('products', 'categories'));
     }
 
+    /**
+     * Hỗ trợ Route category qua slug
+     */
     public function category(Request $request, Category $category)
     {
         $request->merge(['category' => $category->slug]);
         return $this->index($request);
     }
 
+    /**
+     * Hỗ trợ Route search tổng quát
+     */
     public function search(Request $request)
     {
         return $this->index($request);
     }
 
+    /**
+     * 2. Hiển thị chi tiết một sản phẩm
+     */
     public function show($slug)
     {
         $product = Product::where('slug', $slug)->with(['category'])->firstOrFail();
 
+        // Phân trang đánh giá
         $reviews = Review::where('product_id', $product->id)
             ->where('status', 'active')
             ->with('user')
@@ -94,6 +99,7 @@ class ProductController extends Controller
         $pId = $product->id;
         $baseReview = Review::where('product_id', $pId)->where('status', 'active');
 
+        // Thống kê rating
         $ratingCounts = [
             'all'       => (clone $baseReview)->count(),
             'has_image' => (clone $baseReview)->whereNotNull('image')->count(),
@@ -105,6 +111,7 @@ class ProductController extends Controller
             '1_star'    => (clone $baseReview)->where('rating', 1)->count(),
         ];
 
+        // Sản phẩm liên quan
         $relatedProducts = Product::where('category_id', $product->category_id)
             ->where('id', '!=', $pId)
             ->take(4)
@@ -113,6 +120,9 @@ class ProductController extends Controller
         return view('products.show', compact('product', 'relatedProducts', 'reviews', 'ratingCounts'));
     }
 
+    /**
+     * 3. Xử lý AJAX lọc đánh giá (cho trải nghiệm mượt mà)
+     */
     public function fetchReviews(Request $request, $id)
     {
         $query = Review::where('product_id', $id)
