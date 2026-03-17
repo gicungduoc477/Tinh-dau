@@ -61,7 +61,8 @@ class ProductController extends Controller
             return redirect()->route('admin.product.index')->with('message', 'Thêm sản phẩm thành công!');
         } catch (\Exception $e) {
             Log::error("Store Product Error: " . $e->getMessage());
-            return redirect()->back()->withInput()->with('error', 'Lỗi khi thêm: ' . $e->getMessage());
+            // Nếu lỗi do mình chủ động quăng ra (dd), nó sẽ hiển thị ở đây
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
     }
 
@@ -96,7 +97,7 @@ class ProductController extends Controller
             return redirect()->route('admin.product.index')->with('message', 'Cập nhật sản phẩm thành công!');
         } catch (\Exception $e) {
             Log::error("Update Product Error: " . $e->getMessage());
-            return redirect()->back()->withInput()->with('error', 'Lỗi cập nhật: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
     }
 
@@ -107,7 +108,6 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         
-        // Xóa file local nếu có
         if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
             $oldPath = public_path($product->image);
             if (File::exists($oldPath)) {
@@ -120,7 +120,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Logic lưu dữ liệu (Ép sử dụng Facade Cloudinary để dòng import sáng lên)
+     * Logic lưu dữ liệu (Cập nhật DEBUG để hiện lỗi chi tiết)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -134,27 +134,43 @@ class ProductController extends Controller
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $uploadedPath = null;
 
-            // Kiểm tra config từ file config/cloudinary.php hoặc .env
+            // 1. Kiểm tra xem Render có nhận biến môi trường không
             $cloudName = config('cloudinary.cloud_name') ?? env('CLOUDINARY_CLOUD_NAME');
+            $apiKey = config('cloudinary.api_key') ?? env('CLOUDINARY_API_KEY');
 
-            if ($cloudName) {
+            // Nếu đang ở Production (Render), ép buộc phải dùng Cloudinary
+            if (app()->environment('production') || $cloudName) {
                 try {
-                    // SỬ DỤNG FACADE ĐỂ VS CODE HẾT BÁO ẨN DÒNG IMPORT
-                    $uploadedPath = Cloudinary::upload($request->file('image')->getRealPath(), [
+                    if (!$cloudName || !$apiKey) {
+                        throw new \Exception("LỖI: Chưa cấu hình Cloudinary trên Dashboard Render (Cloud Name hoặc API Key trống).");
+                    }
+
+                    $result = Cloudinary::upload($request->file('image')->getRealPath(), [
                         'folder' => 'tinh_dau_shop/products'
-                    ])->getSecurePath();
+                    ]);
+                    $uploadedPath = $result->getSecurePath();
+                    
                 } catch (\Exception $e) {
-                    Log::error("Cloudinary Upload Error: " . $e->getMessage());
+                    // Dừng chương trình và in lỗi ra màn hình để xem
+                    dd([
+                        'Status' => 'Cloudinary Upload Failed',
+                        'Error' => $e->getMessage(),
+                        'Check' => 'Hãy đảm bảo bạn đã điền CLOUDINARY_URL hoặc bộ 3 Key vào Render Environment',
+                        'Current_Config' => [
+                            'cloud_name' => $cloudName,
+                            'api_key' => $apiKey ? 'Đã có giá trị' : 'Trống'
+                        ]
+                    ]);
                 }
             }
 
-            // Fallback về Local nếu Cloud lỗi/không có
+            // 2. Fallback về Local (Chỉ dành cho máy cá nhân)
             if (!$uploadedPath) {
                 $uploadedPath = $this->handleLocalUpload($request->file('image'));
             }
 
             if ($uploadedPath) {
-                // Xóa ảnh cũ nếu là file local để tiết kiệm dung lượng máy nhà
+                // Xóa ảnh cũ nếu là Local
                 if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
                     $oldLocalPath = public_path($product->image);
                     if (File::exists($oldLocalPath)) { File::delete($oldLocalPath); }
