@@ -61,8 +61,7 @@ class ProductController extends Controller
             return redirect()->route('admin.product.index')->with('message', 'Thêm sản phẩm thành công!');
         } catch (\Exception $e) {
             Log::error("Store Product Error: " . $e->getMessage());
-            // Nếu lỗi do mình chủ động quăng ra (dd), nó sẽ hiển thị ở đây
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Lỗi hệ thống: ' . $e->getMessage());
         }
     }
 
@@ -97,7 +96,7 @@ class ProductController extends Controller
             return redirect()->route('admin.product.index')->with('message', 'Cập nhật sản phẩm thành công!');
         } catch (\Exception $e) {
             Log::error("Update Product Error: " . $e->getMessage());
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Lỗi hệ thống: ' . $e->getMessage());
         }
     }
 
@@ -108,6 +107,7 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         
+        // Xóa file local nếu tồn tại
         if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
             $oldPath = public_path($product->image);
             if (File::exists($oldPath)) {
@@ -120,7 +120,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Logic lưu dữ liệu (Cập nhật DEBUG để hiện lỗi chi tiết)
+     * Logic lưu dữ liệu (Tối ưu cho CLOUDINARY_URL & Render)
      */
     private function saveProduct(Product $product, Request $request)
     {
@@ -134,55 +134,48 @@ class ProductController extends Controller
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $uploadedPath = null;
 
-            // 1. Kiểm tra xem Render có nhận biến môi trường không
-            $cloudName = config('cloudinary.cloud_name') ?? env('CLOUDINARY_CLOUD_NAME');
-            $apiKey = config('cloudinary.api_key') ?? env('CLOUDINARY_API_KEY');
+            // Kiểm tra cấu hình Cloudinary qua ENV hoặc Config
+            $hasCloudUrl = env('CLOUDINARY_URL') ?: config('cloudinary.cloud_url');
 
-            // Nếu đang ở Production (Render), ép buộc phải dùng Cloudinary
-            if (app()->environment('production') || $cloudName) {
+            if ($hasCloudUrl) {
                 try {
-                    if (!$cloudName || !$apiKey) {
-                        throw new \Exception("LỖI: Chưa cấu hình Cloudinary trên Dashboard Render (Cloud Name hoặc API Key trống).");
-                    }
-
+                    // Upload trực tiếp bằng Facade
                     $result = Cloudinary::upload($request->file('image')->getRealPath(), [
                         'folder' => 'tinh_dau_shop/products'
                     ]);
                     $uploadedPath = $result->getSecurePath();
-                    
                 } catch (\Exception $e) {
-                    // Dừng chương trình và in lỗi ra màn hình để xem
-                    dd([
-                        'Status' => 'Cloudinary Upload Failed',
-                        'Error' => $e->getMessage(),
-                        'Check' => 'Hãy đảm bảo bạn đã điền CLOUDINARY_URL hoặc bộ 3 Key vào Render Environment',
-                        'Current_Config' => [
-                            'cloud_name' => $cloudName,
-                            'api_key' => $apiKey ? 'Đã có giá trị' : 'Trống'
-                        ]
-                    ]);
+                    Log::error("Cloudinary Upload Failed: " . $e->getMessage());
+                    // Nếu lỗi Cloud, biến $uploadedPath vẫn bằng null để chạy xuống fallback Local
                 }
             }
 
-            // 2. Fallback về Local (Chỉ dành cho máy cá nhân)
+            // Fallback: Nếu không có Cloud hoặc Cloud lỗi, lưu Local
             if (!$uploadedPath) {
                 $uploadedPath = $this->handleLocalUpload($request->file('image'));
             }
 
             if ($uploadedPath) {
-                // Xóa ảnh cũ nếu là Local
+                // Nếu sản phẩm đã có ảnh cũ (dạng local), xóa file cũ để giải phóng bộ nhớ
                 if ($product->image && !filter_var($product->image, FILTER_VALIDATE_URL)) {
                     $oldLocalPath = public_path($product->image);
-                    if (File::exists($oldLocalPath)) { File::delete($oldLocalPath); }
+                    if (File::exists($oldLocalPath)) { 
+                        File::delete($oldLocalPath); 
+                    }
                 }
                 $product->image = $uploadedPath;
             }
         }
 
+        // Luôn cập nhật Slug dựa trên tên mới (hoặc giữ nguyên nếu tên không đổi)
         $product->slug = $this->createUniqueSlug($request->name, $product->id ?? 0);
+        
         $product->save();
     }
 
+    /**
+     * Xử lý upload lên server local
+     */
     private function handleLocalUpload($file)
     {
         try {
@@ -202,11 +195,16 @@ class ProductController extends Controller
         }
     }
 
+    /**
+     * Tạo Slug duy nhất
+     */
     private function createUniqueSlug($name, $id = 0)
     {
         $slug = Str::slug($name);
         $original = $slug;
         $i = 1;
+        
+        // Kiểm tra xem slug đã tồn tại cho sản phẩm khác chưa
         while (Product::where('slug', $slug)->where('id', '!=', $id)->exists()) {
             $slug = $original . '-' . $i++;
         }
