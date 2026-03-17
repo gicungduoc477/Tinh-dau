@@ -346,13 +346,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
 
 <script>
+    // Khởi tạo WOW.js
     new WOW().init();
 
     $(document).ready(function(){
-        // Khởi tạo Carousel
+        // Khởi tạo Owl Carousel
         $('.owl-carousel').owlCarousel({ 
             loop:true, margin:15, nav:false, autoplay:true, 
-            autoplayTimeout:1000, autoplayHoverPause:true, 
+            autoplayTimeout:3000, autoplayHoverPause:true, 
             responsive:{ 0:{ items:1 }, 600:{ items:3 }, 1000:{ items:5 } } 
         });
 
@@ -371,18 +372,20 @@
                 url: url,
                 type: 'GET',
                 success: function(response) {
-                    // Cập nhật vùng chứa sản phẩm
-                    let html = $(response).find('#product-data').html();
-                    $('#product-data').html(html);
+                    // Lấy nội dung mới từ response
+                    let newContent = $(response).find('#product-data').html();
+                    $('#product-data').html(newContent);
                     
-                    // Cập nhật URL thanh địa chỉ
+                    // Cập nhật URL trình duyệt
                     window.history.pushState({path: url}, '', url);
                     
-                    // Cập nhật trạng thái Active sidebar
-                    updateActiveState(url);
+                    // Cập nhật Active State
+                    $('.filter-ajax').removeClass('active');
+                    $(`.filter-ajax[data-url="${url}"], .filter-ajax[href="${url}"]`).addClass('active');
 
-                    // Khởi tạo lại WOW cho các item mới
+                    // Khởi tạo lại các hiệu ứng
                     new WOW().init();
+                    $('html, body').animate({ scrollTop: $("#product-list").offset().top - 100 }, 500);
 
                     // Tắt loading
                     $('#loader').hide();
@@ -395,41 +398,44 @@
             });
         });
 
-        function updateActiveState(url) {
-            $('.filter-ajax').removeClass('active');
-            $('.filter-ajax').each(function() {
-                if($(this).data('url') === url) $(this).addClass('active');
-            });
-        }
-
         // --- HIỆU ỨNG MƯA RƠI ---
         function createDrop() {
             const container = document.getElementById('rainContainer');
             if(!container) return;
+            
             const drop = document.createElement('div');
             drop.classList.add('drop');
-            const leftPos = 10 + (Math.random() * 80);
+            
+            const leftPos = Math.random() * 100;
             const duration = 2 + (Math.random() * 2); 
+            
             drop.style.left = leftPos + '%';
             drop.style.animationDuration = duration + 's';
+            
             container.appendChild(drop);
+
+            // Tạo ripple khi giọt nước "chạm đất" (gần hết animation)
             setTimeout(() => {
                 createRipple(leftPos);
                 drop.remove();
-            }, duration * 1000);
+            }, duration * 1000 - 100);
         }
 
         function createRipple(left) {
             const container = document.getElementById('rainContainer');
+            if(!container) return;
+            
             const ripple = document.createElement('div');
             ripple.classList.add('ripple');
-            ripple.style.left = `calc(${left}% - 5px)`;
-            ripple.style.bottom = '10%'; 
-            ripple.style.width = '20px'; ripple.style.height = '10px';
+            ripple.style.left = left + '%';
+            ripple.style.bottom = '15%'; // Vị trí "mặt nước" trong khu vực welcome
+            
             container.appendChild(ripple);
             setTimeout(() => { ripple.remove(); }, 800);
         }
-        setInterval(createDrop, 600);
+
+        // Chạy hiệu ứng mưa
+        setInterval(createDrop, 400);
     });
 </script>
 @endpush

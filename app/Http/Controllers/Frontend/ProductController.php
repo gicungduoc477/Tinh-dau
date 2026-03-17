@@ -17,6 +17,7 @@ class ProductController extends Controller
     {
         $query = Product::query()->with('category');
 
+        // Lọc theo Danh mục (Category)
         if ($request->filled('category')) {
             $category = Category::where('slug', $request->category)->first();
             if ($category) {
@@ -24,25 +25,32 @@ class ProductController extends Controller
             }
         }
 
-        // Cập nhật logic lọc theo phân loại (Đồng bộ với Admin để tránh lỗi sót sản phẩm)
+        // 2. Lọc theo Phân loại (Classification) - Tối ưu hóa logic nhóm
         if ($request->filled('class')) {
             $cls = $request->class;
             
-            // Nhóm 1: Tinh dầu nguyên chất (Gom cả tiếng Anh và tiếng Việt)
-            if (in_array($cls, ['Tinh dầu nguyên chất', 'PURE OIL'])) {
-                $query->whereIn('classification', ['Tinh dầu nguyên chất', 'PURE OIL']);
+            // Định nghĩa các nhóm phân loại để dễ quản lý
+            $pureGroups = ['Tinh dầu nguyên chất', 'PURE OIL'];
+            $blendGroups = [
+                'Hương liệu pha', 
+                'FRAGRANCE', 
+                'Tinh dầu hỗn hợp (Blend Oil)', 
+                'Tinh dầu không nguyên chất'
+            ];
+
+            if (in_array($cls, $pureGroups)) {
+                $query->whereIn('classification', $pureGroups);
             } 
-            // Nhóm 2: Hương liệu / Blend (Gom tất cả các biến thể từ menu)
-            elseif (in_array($cls, ['Hương liệu pha', 'FRAGRANCE', 'Tinh dầu hỗn hợp (Blend Oil)', 'Tinh dầu không nguyên chất'])) {
-                // Tìm kiếm tất cả các tên gọi có thể có trong Database cho nhóm này
-                $query->whereIn('classification', ['Hương liệu pha', 'FRAGRANCE', 'Tinh dầu hỗn hợp (Blend Oil)', 'Tinh dầu không nguyên chất']);
+            elseif (in_array($cls, $blendGroups)) {
+                $query->whereIn('classification', $blendGroups);
             } 
-            // Fallback: Tìm chính xác theo từ khóa
             else {
+                // Tìm kiếm chính xác nếu không rơi vào các nhóm trên
                 $query->where('classification', $cls);
             }
         }
 
+        // Lọc theo từ khóa tìm kiếm (Search)
         if ($request->filled('q')) {
             $searchTerm = $request->q;
             $query->where(function($q) use ($searchTerm) {
@@ -51,6 +59,10 @@ class ProductController extends Controller
             });
         }
 
+        /**
+         * QUAN TRỌNG: paginate(9)->withQueryString() 
+         * Giúp giữ lại các tham số ?class=...&category=... khi bấm sang trang 2, 3
+         */
         $products = $query->latest()->paginate(9)->withQueryString();
         $categories = Category::withCount('products')->get();
 
@@ -58,17 +70,16 @@ class ProductController extends Controller
     }
 
     /**
-     * Hỗ trợ Route category (định nghĩa trong web.php)
+     * Hỗ trợ Route category
      */
     public function category(Request $request, Category $category)
     {
-        // Merge slug vào request để tái sử dụng logic lọc của hàm index
         $request->merge(['category' => $category->slug]);
         return $this->index($request);
     }
 
     /**
-     * Hỗ trợ Route search (định nghĩa trong web.php)
+     * Hỗ trợ Route search
      */
     public function search(Request $request)
     {
@@ -80,29 +91,33 @@ class ProductController extends Controller
      */
     public function show($slug)
     {
-        $product = Product::where('slug', $slug)->firstOrFail();
+        $product = Product::where('slug', $slug)->with(['category'])->firstOrFail();
 
-        // Lấy danh sách đánh giá của sản phẩm này (Phân trang 5 bản ghi mỗi lượt)
+        // Lấy danh sách đánh giá đã duyệt
         $reviews = Review::where('product_id', $product->id)
             ->where('status', 'active')
             ->with('user')
             ->latest()
-            ->paginate(5);
+            ->paginate(5)
+            ->withQueryString();
 
-        // Lấy số lượng đánh giá theo từng loại sao để hiển thị lên nút lọc
+        // Thống kê đánh giá (Dùng chung 1 biến $id để query nhanh hơn)
+        $pId = $product->id;
+        $baseReview = Review::where('product_id', $pId)->where('status', 'active');
+
         $ratingCounts = [
-            'all'       => Review::where('product_id', $product->id)->where('status', 'active')->count(),
-            'has_image' => Review::where('product_id', $product->id)->where('status', 'active')->whereNotNull('image')->count(),
-            'has_video' => Review::where('product_id', $product->id)->where('status', 'active')->whereNotNull('video')->count(),
-            '5_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 5)->count(),
-            '4_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 4)->count(),
-            '3_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 3)->count(),
-            '2_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 2)->count(),
-            '1_star'    => Review::where('product_id', $product->id)->where('status', 'active')->where('rating', 1)->count(),
+            'all'       => (clone $baseReview)->count(),
+            'has_image' => (clone $baseReview)->whereNotNull('image')->count(),
+            'has_video' => (clone $baseReview)->whereNotNull('video')->count(),
+            '5_star'    => (clone $baseReview)->where('rating', 5)->count(),
+            '4_star'    => (clone $baseReview)->where('rating', 4)->count(),
+            '3_star'    => (clone $baseReview)->where('rating', 3)->count(),
+            '2_star'    => (clone $baseReview)->where('rating', 2)->count(),
+            '1_star'    => (clone $baseReview)->where('rating', 1)->count(),
         ];
 
         $relatedProducts = Product::where('category_id', $product->category_id)
-            ->where('id', '!=', $product->id)
+            ->where('id', '!=', $pId)
             ->take(4)
             ->get();
 
@@ -110,34 +125,29 @@ class ProductController extends Controller
     }
 
     /**
-     * 3. Xử lý lọc đánh giá qua AJAX (Cập nhật lọc Sao & Ảnh)
+     * 3. Xử lý AJAX lọc đánh giá
      */
     public function fetchReviews(Request $request, $id)
     {
-        // Khởi tạo query
         $query = Review::where('product_id', $id)
             ->where('status', 'active')
             ->with('user');
 
-        // Lọc theo số sao nếu khách hàng chọn
         if ($request->filled('rating')) {
             $query->where('rating', $request->rating);
         }
 
-        // Lọc chỉ những đánh giá có hình ảnh
         if ($request->boolean('has_image')) {
             $query->whereNotNull('image');
         }
 
-        // Lọc chỉ những đánh giá có video
         if ($request->boolean('has_video')) {
             $query->whereNotNull('video');
         }
 
-        // Lấy dữ liệu và giữ lại các tham số trên URL (giúp phân trang đúng khi đang lọc)
+        // withQueryString() cực kỳ quan trọng cho phân trang AJAX
         $reviews = $query->latest()->paginate(5)->withQueryString();
 
-        // Trả về Partial View chứa danh sách đánh giá
         return view('products._review_list', compact('reviews'))->render();
     }
 }
