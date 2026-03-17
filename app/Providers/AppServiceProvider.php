@@ -51,8 +51,7 @@ class AppServiceProvider extends ServiceProvider
                     new Dsn(
                         'brevo+api',
                         'default',
-                        null, // User không cần thiết cho Brevo API
-                        env('BREVO_API_KEY')
+                        env('BREVO_API_KEY') // API Key phải được truyền vào tham số user (vị trí thứ 3)
                     )
                 );
             });
