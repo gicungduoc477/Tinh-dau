@@ -63,7 +63,6 @@ Route::controller(FrontendCheckoutController::class)->group(function () {
     Route::get('/checkout/success', 'success')->name('checkout.success');
 });
 
-// Xem đơn hàng (Cho cả khách và user)
 Route::get('/orders/{id}', [FrontendOrderController::class, 'show'])->name('orders.show');
 
 /*
@@ -87,13 +86,12 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 3. AUTH REQUIRED ROUTES (Khách hàng đã đăng nhập)
+| 3. AUTH REQUIRED ROUTES
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     
-    // Profile
     Route::group(['prefix' => 'profile', 'as' => 'profile.', 'controller' => ProfileController::class], function () {
         Route::get('/', 'edit')->name('index');   
         Route::get('/edit', 'edit')->name('edit'); 
@@ -102,21 +100,18 @@ Route::middleware('auth')->group(function () {
         Route::put('/password', 'updatePassword')->name('password'); 
     });
 
-    // Orders Actions
     Route::group(['prefix' => 'orders', 'as' => 'orders.', 'controller' => FrontendOrderController::class], function () {
         Route::get('/', 'index')->name('index');
         Route::post('/{id}/cancel', 'cancel')->name('cancel'); 
         Route::post('/{id}/return', 'requestReturn')->name('requestReturn');
     });
 
-    // Reviews (Đánh giá sản phẩm)
     Route::controller(FrontendReviewController::class)->group(function () {
         Route::get('/my-reviews', 'index')->name('reviews.index'); 
         Route::get('/reviews/create/{product_id}/{order_id?}', 'create')->name('reviews.create'); 
         Route::post('/reviews/store', 'store')->name('reviews.store'); 
     });
 
-    // Notifications (Chuông thông báo)
     Route::group(['prefix' => 'notifications', 'as' => 'notifications.'], function () {
         Route::get('/read/{id}', function($id) {
             $notification = auth()->user()->notifications()->findOrFail($id);
@@ -139,7 +134,7 @@ Route::middleware('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 4. ADMIN ROUTES (Quản trị viên)
+| 4. ADMIN ROUTES
 |--------------------------------------------------------------------------
 */
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -151,7 +146,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->group(function () {
         Route::get('/', fn() => redirect()->route('admin.dashboard'));
 
-        // Dashboard Logic
         Route::get('/dashboard', function () {
             $products = Product::latest()->paginate(8);
             $users_count = User::count();
@@ -208,7 +202,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 5. PAYMENT & SYSTEM (Các Route cứu trợ và thanh toán)
+| 5. SYSTEM & DATA MANAGEMENT (Lệnh giải cứu hệ thống)
 |--------------------------------------------------------------------------
 */
 Route::controller(PaymentController::class)->group(function () {
@@ -218,46 +212,47 @@ Route::controller(PaymentController::class)->group(function () {
     Route::post('/payment/webhook', 'handleWebhook')->name('payment.webhook');
 });
 
-// CẬP NHẬT: Reset Cache Triệt Để
+// Lệnh 1: Reset Cache triệt để (Chạy sau khi deploy)
 Route::get('/fix-system', function () {
     try {
+        Artisan::call('optimize:clear');
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
-        Artisan::call('view:clear');
-        Artisan::call('route:clear');
-        Artisan::call('optimize:clear');
-        return "<h3>HỆ THỐNG ĐÃ RESET CACHE THÀNH CÔNG!</h3><a href='/'>Về trang chủ</a>";
+        return "<h3>HỆ THỐNG ĐÃ LÀM MỚI CACHE!</h3><a href='/'>Về trang chủ</a>";
     } catch (\Exception $e) {
         return "Lỗi: " . $e->getMessage();
     }
 });
 
-// CẬP NHẬT: Xóa sạch sản phẩm cũ (Bỏ qua khóa ngoại)
+// Lệnh 2: Xóa sạch dữ liệu lỗi để làm lại từ đầu
 Route::get('/clean-products', function () {
     try {
-        // 1. Tắt check khóa ngoại
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-
-        // 2. Xóa các bảng liên quan trước để tránh dữ liệu mồ côi
         DB::table('carts')->delete();
         DB::table('product_images')->delete();
         DB::table('order_items')->delete();
-        
-        // 3. Xóa sản phẩm
         Product::query()->delete();
-
-        // 4. Bật lại check
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        // 5. Xóa ảnh local nếu có
         $path = public_path('uploads/product');
-        if (File::exists($path)) {
-            File::cleanDirectory($path);
-        }
+        if (File::exists($path)) { File::cleanDirectory($path); }
 
-        return "<h3>ĐÃ XÓA SẠCH SẢN PHẨM VÀ DỮ LIỆU LIÊN QUAN!</h3><a href='/admin/product'>Về quản lý sản phẩm</a>";
+        return "<h3>ĐÃ DỌN DẸP SẠCH DATABASE!</h3><a href='/seed-products'>Click vào đây để đổ dữ liệu mới</a>";
     } catch (\Exception $e) {
-        return "Lỗi khi làm sạch database: " . $e->getMessage();
+        return "Lỗi dọn dẹp: " . $e->getMessage();
+    }
+});
+
+// Lệnh 3: Kích hoạt Seeder để đổ 20 sản phẩm lên Cloudinary
+Route::get('/seed-products', function () {
+    try {
+        // Tăng thời gian thực thi vì upload 20 ảnh lên Cloudinary rất lâu
+        set_time_limit(300); 
+        
+        Artisan::call('db:seed', ['--class' => 'ProductSeeder']);
+        return "<h3>ĐÃ ĐỔ DỮ LIỆU VÀ UPLOAD ẢNH LÊN CLOUDINARY THÀNH CÔNG!</h3><a href='/admin/product'>Đến trang quản lý sản phẩm</a>";
+    } catch (\Exception $e) {
+        return "Lỗi Seeding: " . $e->getMessage();
     }
 });
 
