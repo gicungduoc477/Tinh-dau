@@ -7,7 +7,9 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary; 
+// Thay thế Facade bằng SDK thủ công để ổn định hơn trên Render
+use Cloudinary\Configuration\Configuration;
+use Cloudinary\Api\Upload\UploadApi;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\File;
 
@@ -134,16 +136,18 @@ class ProductController extends Controller
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $uploadedPath = null;
 
-            // Sử dụng config() thay vì env() để đảm bảo hoạt động đúng khi cache config trên Render
-            $hasCloudUrl = config('cloudinary.cloud_url');
+            // Lấy link Cloudinary: Ưu tiên Config, nếu null thì thử lấy trực tiếp từ Env
+            $hasCloudUrl = config('cloudinary.cloud_url') ?? env('CLOUDINARY_URL');
 
             if ($hasCloudUrl) {
                 try {
-                    // Upload trực tiếp bằng Facade
-                    $result = Cloudinary::upload($request->file('image')->getRealPath(), [
+                    // Khởi tạo thủ công để đảm bảo nhận đúng URL
+                    Configuration::instance($hasCloudUrl);
+                    $uploadApi = new UploadApi();
+                    $result = $uploadApi->upload($request->file('image')->getRealPath(), [
                         'folder' => 'tinh_dau_shop/products'
                     ]);
-                    $uploadedPath = $result->getSecurePath();
+                    $uploadedPath = $result['secure_url'] ?? null;
                 } catch (\Exception $e) {
                     Log::error("Cloudinary Upload Failed: " . $e->getMessage());
                     // Nếu lỗi Cloud, biến $uploadedPath vẫn bằng null để chạy xuống fallback Local
