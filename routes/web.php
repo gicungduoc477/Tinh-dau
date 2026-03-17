@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Order;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 
 // Admin Controllers
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -93,15 +94,13 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     
     // Profile
-Route::group(['prefix' => 'profile', 'as' => 'profile.', 'controller' => ProfileController::class], function () {
-    Route::get('/', 'edit')->name('index');   
-    Route::get('/edit', 'edit')->name('edit'); 
-    Route::patch('/', 'update')->name('update');
-    Route::delete('/', 'destroy')->name('destroy');
-    
-    // THÊM DÒNG NÀY ĐỂ FIX LỖI:
-    Route::put('/password', 'updatePassword')->name('password'); 
-});
+    Route::group(['prefix' => 'profile', 'as' => 'profile.', 'controller' => ProfileController::class], function () {
+        Route::get('/', 'edit')->name('index');   
+        Route::get('/edit', 'edit')->name('edit'); 
+        Route::patch('/', 'update')->name('update');
+        Route::delete('/', 'destroy')->name('destroy');
+        Route::put('/password', 'updatePassword')->name('password'); 
+    });
 
     // Orders Actions
     Route::group(['prefix' => 'orders', 'as' => 'orders.', 'controller' => FrontendOrderController::class], function () {
@@ -117,14 +116,11 @@ Route::group(['prefix' => 'profile', 'as' => 'profile.', 'controller' => Profile
         Route::post('/reviews/store', 'store')->name('reviews.store'); 
     });
 
-    // --- CẬP NHẬT: NOTIFICATIONS (Chuông thông báo) ---
+    // Notifications (Chuông thông báo)
     Route::group(['prefix' => 'notifications', 'as' => 'notifications.'], function () {
-        // Click vào thông báo: Đánh dấu đã đọc & Chuyển hướng
         Route::get('/read/{id}', function($id) {
             $notification = auth()->user()->notifications()->findOrFail($id);
             $notification->markAsRead();
-            
-            // Lấy URL từ data của notification, nếu không có thì về trang chủ
             $url = $notification->data['url'] ?? route('home');
             return redirect($url);
         })->name('readAndRedirect');
@@ -188,7 +184,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('product', AdminProductController::class);
         Route::resource('users', AdminUserController::class);
 
-        // Quản lý đơn hàng Admin
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'controller' => AdminOrderController::class], function () {
             Route::get('/', 'index')->name('index');
             Route::get('/refunds', 'refundList')->name('refunds'); 
@@ -197,7 +192,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', 'destroy')->name('destroy'); 
         });
 
-        // Quản lý Review Admin
         Route::group(['prefix' => 'reviews', 'as' => 'reviews.', 'controller' => AdminReviewController::class], function () {
             Route::get('/index', 'index')->name('index');
             Route::post('/{id}/toggle', 'toggle')->name('toggle'); 
@@ -214,7 +208,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| 5. PAYMENT & SYSTEM
+| 5. PAYMENT & SYSTEM (Các Route cứu trợ và thanh toán)
 |--------------------------------------------------------------------------
 */
 Route::controller(PaymentController::class)->group(function () {
@@ -224,12 +218,46 @@ Route::controller(PaymentController::class)->group(function () {
     Route::post('/payment/webhook', 'handleWebhook')->name('payment.webhook');
 });
 
+// CẬP NHẬT: Reset Cache Triệt Để
 Route::get('/fix-system', function () {
     try {
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+        Artisan::call('view:clear');
+        Artisan::call('route:clear');
         Artisan::call('optimize:clear');
         return "<h3>HỆ THỐNG ĐÃ RESET CACHE THÀNH CÔNG!</h3><a href='/'>Về trang chủ</a>";
     } catch (\Exception $e) {
         return "Lỗi: " . $e->getMessage();
+    }
+});
+
+// CẬP NHẬT: Xóa sạch sản phẩm cũ (Bỏ qua khóa ngoại)
+Route::get('/clean-products', function () {
+    try {
+        // 1. Tắt check khóa ngoại
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+
+        // 2. Xóa các bảng liên quan trước để tránh dữ liệu mồ côi
+        DB::table('carts')->delete();
+        DB::table('product_images')->delete();
+        DB::table('order_items')->delete();
+        
+        // 3. Xóa sản phẩm
+        Product::query()->delete();
+
+        // 4. Bật lại check
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+        // 5. Xóa ảnh local nếu có
+        $path = public_path('uploads/product');
+        if (File::exists($path)) {
+            File::cleanDirectory($path);
+        }
+
+        return "<h3>ĐÃ XÓA SẠCH SẢN PHẨM VÀ DỮ LIỆU LIÊN QUAN!</h3><a href='/admin/product'>Về quản lý sản phẩm</a>";
+    } catch (\Exception $e) {
+        return "Lỗi khi làm sạch database: " . $e->getMessage();
     }
 });
 
