@@ -14,58 +14,61 @@ class ProductSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Cấu hình Cloudinary thủ công (để chạy mượt trên Render)
         $cloudinaryUrl = env('CLOUDINARY_URL');
         $cloudinary = null;
         if ($cloudinaryUrl) {
             $cloudinary = new Cloudinary(Configuration::instance($cloudinaryUrl));
         }
 
-        // 2. Tạo hoặc lấy Category
         $category = Category::firstOrCreate(
             ['slug' => 'tinh-dau-thien-nhien'],
             ['name' => 'Tinh dầu thiên nhiên']
         );
 
-        // 3. Danh sách sản phẩm (Tên, Slug, Giá, Tên file ảnh tương ứng trong public/seed_images)
+        // Thêm cột phân loại vào mảng để seed đa dạng dữ liệu
+        // Cấu trúc: [Tên, Slug, Giá, Ảnh, Phân loại]
         $products = [
-            ['Sả Chanh', 'tinh-dau-sa-chanh', 150000, 'sa_chanh.jpg'],
-            ['Bạc Hà', 'tinh-dau-bac-ha', 120000, 'bac_ha.jpg'],
-            ['Oải Hương', 'tinh-dau-oai-huong', 250000, 'oai_huong.jpg'],
-            ['Tràm Gió', 'tinh-dau-tram-gio', 180000, 'tram_gio.jpg'],
-            ['Vỏ Quế', 'tinh-dau-vo-que', 140000, 'vo_que.jpg'],
-            ['Bưởi Da Xanh', 'tinh-dau-buoi', 190000, 'buoi.jpg'],
-            ['Gỗ Đàn Hương', 'tinh-dau-dan-huong', 450000, 'dan_huong.jpg'],
-            ['Ngọc Lan Tây', 'tinh-dau-ngoc-lan', 220000, 'ngoc_lan.jpg'],
-            ['Hoa Hồng', 'tinh-dau-hoa-hong', 500000, 'hoa_hong.jpg'],
-            ['Chanh Vàng', 'tinh-dau-chanh-vang', 130000, 'chanh_vang.jpg'],
-            ['Cam Ngọt', 'tinh-dau-cam-ngot', 110000, 'cam_ngot.jpg'],
-            ['Khuynh Diệp', 'tinh-dau-khuynh-diep', 160000, 'khuynh_diep.jpg'],
-            ['Gỗ Thông', 'tinh-dau-go-thong', 210000, 'go_thong.jpg'],
-            ['Hương Thảo', 'tinh-dau-huong-thao', 230000, 'huong_thao.jpg'],
-            ['Trà Xanh', 'tinh-dau-tra-xanh', 170000, 'tra_xanh.jpg'],
-            ['Gừng Tuyết', 'tinh-dau-gung', 195000, 'gung.jpg'],
-            ['Hoa Nhài', 'tinh-dau-hoa-nhai', 480000, 'hoa_nhai.jpg'],
-            ['Trầm Hương', 'tinh-dau-tram-huong', 900000, 'tram_huong.jpg'],
-            ['Kinh Giới', 'tinh-dau-kinh-gioi', 155000, 'kinh_gioi.jpg'],
-            ['Sả Hoa Hồng', 'tinh-dau-sa-hoa-hong', 165000, 'sa_hoa_hong.jpg'],
+            ['Sả Chanh', 'tinh-dau-sa-chanh', 150000, 'sa_chanh.jpg', 'Tinh dầu nguyên chất'],
+            ['Bạc Hà', 'tinh-dau-bac-ha', 120000, 'bac_ha.jpg', 'Tinh dầu nguyên chất'],
+            ['Oải Hương', 'tinh-dau-oai-huong', 250000, 'oai_huong.jpg', 'Tinh dầu nguyên chất'],
+            ['Hương Thảo', 'tinh-dau-huong-thao', 230000, 'huong_thao.jpg', 'Tinh dầu nguyên chất'],
+            
+            // Nhóm Blend Oil (Để test phân loại Hỗn hợp)
+            ['Sleep Well', 'tinh-dau-ngu-ngon', 300000, 'sleep_well.jpg', 'Tinh dầu hỗn hợp (Blend Oil)'],
+            ['Stress Relief', 'tinh-dau-giam-stress', 320000, 'stress.jpg', 'Tinh dầu hỗn hợp (Blend Oil)'],
+            ['Fresh Air', 'tinh-dau-khong-khi-tuoi-moi', 280000, 'fresh.jpg', 'Tinh dầu hỗn hợp (Blend Oil)'],
+            
+            // Nhóm Fragrance (Để test phân loại Hương liệu)
+            ['Hương Nước Hoa Pháp', 'huong-nuoc-hoa-phap', 180000, 'perfume.jpg', 'Hương liệu pha'],
+            ['Hương Trà Trắng', 'huong-tra-trang', 160000, 'white_tea.jpg', 'Hương liệu pha'],
+            
+            ['Tràm Gió', 'tinh-dau-tram-gio', 180000, 'tram_gio.jpg', 'Tinh dầu nguyên chất'],
+            ['Vỏ Quế', 'tinh-dau-vo-que', 140000, 'vo_que.jpg', 'Tinh dầu nguyên chất'],
+            ['Bưởi Da Xanh', 'tinh-dau-buoi', 190000, 'buoi.jpg', 'Tinh dầu nguyên chất'],
+            ['Gỗ Đàn Hương', 'tinh-dau-dan-huong', 450000, 'dan_huong.jpg', 'Tinh dầu nguyên chất'],
+            ['Ngọc Lan Tây', 'tinh-dau-ngoc-lan', 220000, 'ngoc_lan.jpg', 'Tinh dầu nguyên chất'],
+            ['Hoa Hồng', 'tinh-dau-hoa-hong', 500000, 'hoa_hong.jpg', 'Tinh dầu nguyên chất'],
+            ['Chanh Vàng', 'tinh-dau-chanh-vang', 130000, 'chanh_vang.jpg', 'Tinh dầu nguyên chất'],
+            ['Cam Ngọt', 'tinh-dau-cam-ngot', 110000, 'cam_ngot.jpg', 'Tinh dầu nguyên chất'],
+            ['Khuynh Diệp', 'tinh-dau-khuynh-diep', 160000, 'khuynh_diep.jpg', 'Tinh dầu nguyên chất'],
+            ['Gỗ Thông', 'tinh-dau-go-thong', 210000, 'go_thong.jpg', 'Tinh dầu nguyên chất'],
+            ['Trà Xanh', 'tinh-dau-tra-xanh', 170000, 'tra_xanh.jpg', 'Tinh dầu nguyên chất'],
         ];
 
-        // Link ảnh mẫu nếu không tìm thấy file local
         $sampleImage = 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=500';
 
         foreach ($products as $p) {
             $slug = $p[1];
             $fileName = $p[3];
+            $classification = $p[4]; // Lấy phân loại từ mảng
             $imagePath = public_path('seed_images/' . $fileName);
             $finalUrl = null;
 
-            // Kiểm tra và upload ảnh lên Cloudinary
             if ($cloudinary && file_exists($imagePath)) {
                 try {
                     $result = $cloudinary->uploadApi()->upload($imagePath, [
                         'folder' => 'tinh_dau_shop/products',
-                        'public_id' => $slug // Giữ slug làm ID ảnh cho đẹp
+                        'public_id' => $slug
                     ]);
                     $finalUrl = $result['secure_url'];
                 } catch (\Exception $e) {
@@ -73,7 +76,6 @@ class ProductSeeder extends Seeder
                 }
             }
 
-            // Nếu upload thất bại hoặc không có file, giữ ảnh cũ hoặc dùng ảnh mẫu
             if (!$finalUrl) {
                 $existingProduct = Product::where('slug', $slug)->first();
                 $finalUrl = $existingProduct?->image ?? $sampleImage;
@@ -82,12 +84,12 @@ class ProductSeeder extends Seeder
             Product::updateOrCreate(
                 ['slug' => $slug], 
                 [
-                    'name' => 'Tinh dầu ' . $p[0],
+                    'name' => (str_contains($p[0], 'Hương') ? '' : 'Tinh dầu ') . $p[0],
                     'price' => $p[2],
-                    'description' => 'Tinh dầu nguyên chất 100% tự nhiên giúp thư giãn và tốt cho sức khỏe.',
+                    'description' => 'Sản phẩm chất lượng cao giúp không gian sống thêm dễ chịu.',
                     'category_id' => $category->id,
                     'stock' => rand(10, 50),
-                    'classification' => 'Tinh dầu nguyên chất',
+                    'classification' => $classification, // Cập nhật phân loại đúng ở đây
                     'image' => $finalUrl,
                 ]
             );
