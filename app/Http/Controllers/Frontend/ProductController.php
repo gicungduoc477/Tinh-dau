@@ -26,13 +26,20 @@ class ProductController extends Controller
 
         // Cập nhật logic lọc theo phân loại (Đồng bộ với Admin để tránh lỗi sót sản phẩm)
         if ($request->filled('class')) {
-            $classification = $request->class;
-            if ($classification === 'Tinh dầu nguyên chất') {
+            $cls = $request->class;
+            
+            // Nhóm 1: Tinh dầu nguyên chất (Gom cả tiếng Anh và tiếng Việt)
+            if (in_array($cls, ['Tinh dầu nguyên chất', 'PURE OIL'])) {
                 $query->whereIn('classification', ['Tinh dầu nguyên chất', 'PURE OIL']);
-            } elseif ($classification === 'Hương liệu pha') {
-                $query->whereIn('classification', ['Hương liệu pha', 'FRAGRANCE']);
-            } else {
-                $query->where('classification', $classification);
+            } 
+            // Nhóm 2: Hương liệu / Blend (Gom tất cả các biến thể từ menu)
+            elseif (in_array($cls, ['Hương liệu pha', 'FRAGRANCE', 'Tinh dầu hỗn hợp (Blend Oil)', 'Tinh dầu không nguyên chất'])) {
+                // Tìm kiếm tất cả các tên gọi có thể có trong Database cho nhóm này
+                $query->whereIn('classification', ['Hương liệu pha', 'FRAGRANCE', 'Tinh dầu hỗn hợp (Blend Oil)', 'Tinh dầu không nguyên chất']);
+            } 
+            // Fallback: Tìm chính xác theo từ khóa
+            else {
+                $query->where('classification', $cls);
             }
         }
 
