@@ -8,19 +8,35 @@
 .DS_Store
 Thumbs.db
 
-# Giữ lại thư mục public nhưng bỏ qua các file build tạm
+# --- LARAVEL CORE ---
+# Giữ lại cấu trúc thư mục bootstrap nhưng bỏ qua file cache build
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+
+# --- PUBLIC FILES ---
 /public/build
 /public/hot
 /public/storage
 
-# Laravel storage
+# Quan trọng: Giữ lại thư mục uploads nhưng không lưu ảnh rác lên Git
+# Điều này giúp folder tồn tại trên Render để code không bị lỗi "Directory not found"
+/public/uploads/product/*
+!/public/uploads/product/.gitignore
+
+# --- STORAGE ---
 /storage/*.key
 /storage/app/public/*
+!/storage/app/public/.gitignore
 /storage/framework/cache/data/*
 /storage/framework/sessions/*
 /storage/framework/views/*
 /storage/logs/*
 
-# Editor folders
+# --- EDITOR & OS ---
 .idea/
 .vscode/
+*.sublime-project
+*.sublime-workspace
+._*
+.Spotlight-V100
+.Trashes
