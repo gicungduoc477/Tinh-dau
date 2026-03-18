@@ -2,7 +2,8 @@
 
 return [
 
-    'default' => env('FILESYSTEM_DISK', 'public'), // Đổi mặc định thành public
+    // Đổi mặc định thành cloudinary để an toàn cho môi trường Render
+    'default' => env('FILESYSTEM_DISK', 'cloudinary'), 
 
     'disks' => [
 
@@ -16,11 +17,16 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => public_path('uploads/product'), // Trỏ thẳng vào thư mục public thực tế
+            'root' => public_path('uploads/product'), 
             'url' => env('APP_URL').'/uploads/product',
             'visibility' => 'public',
-            'throw' => true, // Bật true để nếu lỗi nó báo ngay lập tức
+            'throw' => true,
             'report' => false,
+        ],
+
+        // THÊM DISK CLOUDINARY VÀO ĐÂY
+        'cloudinary' => [
+            'driver' => 'cloudinary',
         ],
 
         's3' => [
