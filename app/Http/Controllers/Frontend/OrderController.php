@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Notifications\OrderPlacedNotification; // Import Notification
@@ -80,7 +83,7 @@ class OrderController extends Controller
     public function requestReturn(Request $request, $id)
     {
         $order = Order::where('user_id', Auth::id())
-            ->where('status', 'success') 
+            ->whereIn('status', ['success', 'shipping']) 
             ->findOrFail($id);
 
         if (!$order->canBeReturned()) {
@@ -104,8 +107,24 @@ class OrderController extends Controller
             DB::beginTransaction();
 
             $imagePath = null;
-            if ($request->hasFile('return_image')) {
-                $imagePath = $request->file('return_image')->store('returns', 'public');
+            if ($request->hasFile('return_image') && $request->file('return_image')->isValid()) {
+                try {
+                    $file = $request->file('return_image');
+                    $extension = strtolower($file->getClientOriginalExtension());
+                    $filename = time() . '_' . Str::random(8) . '.' . $extension;
+                    $destinationPath = public_path('uploads/returns');
+
+                    if (!File::isDirectory($destinationPath)) {
+                        File::makeDirectory($destinationPath, 0755, true, true);
+                    }
+
+                    $file->move($destinationPath, $filename);
+                    $imagePath = 'uploads/returns/' . $filename;
+                } catch (\Exception $e) {
+                    DB::rollBack(); // Rollback on image upload failure
+                    Log::error("Return Image Upload Error: " . $e->getMessage());
+                    return back()->with('error', 'Lỗi tải lên ảnh: ' . $e->getMessage());
+                }
             }
 
             $oldStatus = $order->status;
