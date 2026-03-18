@@ -29,16 +29,17 @@ class AppServiceProvider extends ServiceProvider
 
         // 2. ÉP DÙNG HTTPS VÀ XỬ LÝ PROXY TRÊN RENDER
         if (config('app.env') !== 'local') {
+            // Ép tất cả URL được tạo ra (asset, route) phải dùng https
             URL::forceScheme('https');
             
-            // Đảm bảo Laravel hiểu các link được tạo ra là HTTPS
+            // Fix lỗi mất giao diện CSS/JS do Mixed Content trên Render
             if (isset($this->app['request'])) {
                 $this->app['request']->server->set('HTTPS', true);
             }
         }
 
-        // 3. CẤU HÌNH CLOUDINARY (Bổ sung để fix lỗi Undefined array key "cloud")
-        // Việc nạp cứng vào config tại đây sẽ ghi đè lên các file config bị lỗi cache
+        // 3. CẤU HÌNH CLOUDINARY (Fix triệt để Undefined array key "cloud")
+        // Nạp cấu hình từ ENV vào Config để ghi đè mọi cache cũ trên server
         if (env('CLOUDINARY_URL') || env('CLOUDINARY_CLOUD_NAME')) {
             config([
                 'cloudinary.cloud_url' => env('CLOUDINARY_URL'),
@@ -47,10 +48,14 @@ class AppServiceProvider extends ServiceProvider
                     'api_key'    => env('CLOUDINARY_API_KEY'),
                     'api_secret' => env('CLOUDINARY_API_SECRET'),
                 ],
+                // Thêm defaults để thư viện không báo lỗi thiếu index
+                'cloudinary.upload' => [
+                    'folder' => env('CLOUDINARY_FOLDER', 'tinh_dau_shop/products'),
+                ],
             ]);
         }
 
-        // 4. ĐĂNG KÝ DRIVER BREVO
+        // 4. ĐĂNG KÝ DRIVER BREVO (Fix lỗi Unsupported mail transport)
         if (env('BREVO_API_KEY')) {
             Mail::extend('brevo', function (array $config) {
                 return (new BrevoTransportFactory)->create(
