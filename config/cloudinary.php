@@ -1,7 +1,7 @@
 <?php
 
 return [
-    // Hỗ trợ link tổng hợp từ Render
+    // Hỗ trợ link tổng hợp từ Render (CLOUDINARY_URL=cloudinary://key:secret@name)
     'cloud_url' => env('CLOUDINARY_URL'),
 
     // Cấu trúc mảng 'cloud' để fix lỗi "Undefined array key 'cloud'"

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Notifications\OrderPlacedNotification;
-// Sử dụng Cloudinary Facade
+// Sử dụng Cloudinary Facade chính xác
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class OrderController extends Controller
@@ -59,17 +59,13 @@ class OrderController extends Controller
         $canReturn = false;
         $remainingTime = null;
 
-        // Tính toán thời gian khiếu nại (mặc định 7 ngày hoặc dùng Order::RETURN_LIMIT_DAYS)
-        if ($order->status === 'success' && $order->updated_at) {
+        // Tính toán thời gian khiếu nại (Dựa trên canBeReturned() trong Model)
+        if (method_exists($order, 'canBeReturned') && $order->canBeReturned()) {
+            $canReturn = true;
             $limitDays = defined('App\Models\Order::RETURN_LIMIT_DAYS') ? Order::RETURN_LIMIT_DAYS : 7;
             $expiryDate = $order->updated_at->addDays($limitDays);
-            $now = now();
-
-            if ($now->lt($expiryDate)) {
-                $canReturn = true;
-                $diff = $now->diff($expiryDate);
-                $remainingTime = $diff->d . ' ngày ' . $diff->h . ' giờ';
-            }
+            $diff = now()->diff($expiryDate);
+            $remainingTime = $diff->d . ' ngày ' . $diff->h . ' giờ';
         }
 
         return view('orders.show', compact('order', 'canReturn', 'remainingTime'));
@@ -77,15 +73,16 @@ class OrderController extends Controller
 
     /**
      * Gửi yêu cầu Khiếu nại (Hoàn tiền/Trả hàng)
-     * Đã fix lỗi config 'cloud' và tối ưu hóa việc upload ảnh
+     * Đã fix lỗi config 'cloud' và tối ưu hóa việc upload đa ảnh
      */
     public function requestReturn(Request $request, $id)
     {
+        // Chỉ cho phép khiếu nại đơn đã giao thành công hoặc đang giao (tùy chính sách shop)
         $order = Order::where('user_id', Auth::id())
-            ->whereIn('status', ['success', 'shipping']) 
+            ->whereIn('status', ['success', 'shipping', 'delivered']) 
             ->findOrFail($id);
 
-        // Kiểm tra logic nghiệp vụ từ Model
+        // Kiểm tra thời hạn khiếu nại từ logic Model
         if (!$order->canBeReturned()) {
             return back()->with('error', 'Đã hết thời hạn khiếu nại hoặc trạng thái đơn hàng không cho phép.');
         }
@@ -106,7 +103,7 @@ class OrderController extends Controller
             if ($request->hasFile('return_images')) {
                 foreach ($request->file('return_images') as $file) {
                     if ($file->isValid()) {
-                        // Gọi SDK thủ công. Lưu ý: Thư mục 'returns' phải tồn tại hoặc sẽ tự tạo trên Cloudinary
+                        // Upload lên thư mục 'returns' trên Cloudinary
                         $result = Cloudinary::upload($file->getRealPath(), [
                             'folder' => 'returns',
                             'transformation' => [
@@ -115,7 +112,7 @@ class OrderController extends Controller
                             ]
                         ]);
 
-                        // Lấy URL an toàn (hỗ trợ cả kết quả dạng Object hoặc Array)
+                        // Trích xuất URL an toàn (xử lý linh hoạt kiểu trả về của SDK)
                         $url = is_object($result) 
                             ? (method_exists($result, 'getSecurePath') ? $result->getSecurePath() : ($result->secure_url ?? null))
                             : ($result['secure_url'] ?? null);
@@ -128,12 +125,11 @@ class OrderController extends Controller
             }
 
             if (empty($imagePaths)) {
-                throw new \Exception("Không thể tải bằng chứng hình ảnh. Vui lòng thử lại.");
+                throw new \Exception("Không thể tải ảnh bằng chứng lên Cloudinary.");
             }
 
-            // Cập nhật đơn hàng
-            // Chú ý: Vì Model Order có cast 'return_image' => 'array', 
-            // chúng ta truyền mảng $imagePaths trực tiếp, Laravel tự encode JSON.
+            // Cập nhật thông tin đơn hàng
+            // Lưu ý: $order->return_image được Model cast tự động sang JSON
             $order->update([
                 'status'         => 'returning',
                 'return_reason'  => $request->return_reason,
@@ -144,27 +140,27 @@ class OrderController extends Controller
                 'account_holder' => $request->account_holder,
             ]);
 
-            // Ghi lại lịch sử trạng thái
+            // Lưu lịch sử trạng thái
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => $order->getOriginal('status'),
                 'to_status'   => 'returning',
                 'user_id'     => Auth::id(),
-                'note'        => 'Khách hàng gửi khiếu nại. Lý do: ' . $request->return_reason,
+                'note'        => 'Khách hàng gửi khiếu nại: ' . $request->return_reason,
             ]);
 
             DB::commit();
-            return back()->with('success', 'Gửi khiếu nại thành công! Chúng tôi sẽ sớm liên hệ.');
+            return back()->with('success', 'Gửi khiếu nại thành công! Shop sẽ kiểm tra và phản hồi sớm.');
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Lỗi khiếu nại đơn hàng #{$id}: " . $e->getMessage());
-            return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
+            return back()->with('error', 'Có lỗi xảy ra khi xử lý: ' . $e->getMessage());
         }
     }
 
     /**
-     * Hủy đơn hàng (Chỉ khi đang chờ hoặc đã thanh toán nhưng chưa giao)
+     * Hủy đơn hàng
      */
     public function cancel(Request $request, $id)
     {
@@ -178,7 +174,7 @@ class OrderController extends Controller
             $oldStatus = $order->status;
             $order->update(['status' => 'canceled']);
 
-            // Hoàn lại tồn kho cho sản phẩm
+            // Hoàn lại số lượng tồn kho
             foreach ($order->items as $item) {
                 if ($item->product) {
                     $item->product->increment('stock', $item->quantity);
@@ -194,12 +190,12 @@ class OrderController extends Controller
             ]);
 
             DB::commit();
-            return back()->with('success', 'Hủy đơn hàng thành công.');
+            return back()->with('success', 'Đã hủy đơn hàng thành công.');
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Lỗi hủy đơn #{$id}: " . $e->getMessage());
-            return back()->with('error', 'Không thể hủy đơn hàng lúc này.');
+            return back()->with('error', 'Không thể hủy đơn hàng vào lúc này.');
         }
     }
 }
