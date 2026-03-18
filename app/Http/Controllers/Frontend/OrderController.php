@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Notifications\OrderPlacedNotification;
-// IMPORT Cloudinary SDK
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class OrderController extends Controller
@@ -50,7 +49,6 @@ class OrderController extends Controller
         $canReturn = false;
         $remainingTime = null;
 
-        // Kiểm tra điều kiện khiếu nại (thường là 7 ngày sau thành công)
         if ($order->status === 'success' && $order->updated_at) {
             $expiryDate = $order->updated_at->addDays(7);
             $now = now();
@@ -66,8 +64,8 @@ class OrderController extends Controller
     }
 
     /**
-     * Gửi yêu cầu Khiếu nại dùng Cloudinary SDK
-     * Cho phép upload nhiều ảnh và lưu dạng JSON
+     * CẬP NHẬT: Gửi yêu cầu Khiếu nại
+     * Sửa lỗi "Array offset on null" bằng cách kiểm tra nghiêm ngặt kết quả Cloudinary
      */
     public function requestReturn(Request $request, $id)
     {
@@ -82,7 +80,7 @@ class OrderController extends Controller
         $request->validate([
             'return_reason'   => 'required|string|max:255',
             'return_images'    => 'required|array|min:1',
-            'return_images.*'  => 'image|mimes:jpeg,png,jpg|max:5120', // Tăng lên 5MB cho thoải mái
+            'return_images.*'  => 'image|mimes:jpeg,png,jpg|max:5120',
             'bank_name'       => 'required|string|max:100',
             'account_number'  => 'required|string|max:30',
             'account_holder'  => 'required|string|max:100',
@@ -97,35 +95,44 @@ class OrderController extends Controller
             if ($request->hasFile('return_images')) {
                 foreach ($request->file('return_images') as $file) {
                     if ($file->isValid()) {
-                        // Upload từng ảnh lên Cloudinary
-                        $uploadedFile = Cloudinary::upload($file->getRealPath(), [
-                            'folder' => 'returns',
-                            'transformation' => [
-                                'quality' => 'auto',
-                                'fetch_format' => 'auto'
-                            ]
-                        ]);
-                        
-                        // Kiểm tra kết quả trả về trước khi lấy URL
-                        if ($uploadedFile && $uploadedFile->getSecurePath()) {
-                            $imagePaths[] = $uploadedFile->getSecurePath();
+                        // SỬA LỖI TẠI ĐÂY: Sử dụng try-catch riêng cho từng file và kiểm tra phương thức tồn tại
+                        try {
+                            $uploadedFile = Cloudinary::upload($file->getRealPath(), [
+                                'folder' => 'returns',
+                                'transformation' => [
+                                    'quality' => 'auto',
+                                    'fetch_format' => 'auto'
+                                ]
+                            ]);
+
+                            // Kiểm tra an toàn trước khi lấy Path
+                            if (is_object($uploadedFile) && method_exists($uploadedFile, 'getSecurePath')) {
+                                $imagePaths[] = $uploadedFile->getSecurePath();
+                            } elseif (is_array($uploadedFile) && isset($uploadedFile['secure_url'])) {
+                                // Một số phiên bản trả về array thay vì object
+                                $imagePaths[] = $uploadedFile['secure_url'];
+                            }
+                        } catch (\Exception $uploadError) {
+                            Log::error("Single File Upload Failed: " . $uploadError->getMessage());
+                            continue; // Bỏ qua file lỗi, tiếp tục file khác
                         }
                     }
                 }
             }
 
-            // Kiểm tra lại nếu mảng ảnh rỗng (upload thất bại hết)
+            // Nếu sau vòng lặp mà không có ảnh nào thành công
             if (empty($imagePaths)) {
-                throw new \Exception("Không thể tải ảnh lên hệ thống lưu trữ Cloudinary.");
+                throw new \Exception("Hệ thống không thể tải ảnh lên Cloudinary. Vui lòng kiểm tra kết nối mạng hoặc cấu hình API.");
             }
 
             $oldStatus = $order->status;
             $newStatus = 'returning';
             
+            // Đảm bảo dữ liệu được encode JSON chuẩn
             $order->update([
                 'status'         => $newStatus,
                 'return_reason'  => $request->return_reason,
-                'return_image'   => json_encode($imagePaths), // Lưu mảng URLs
+                'return_image'   => json_encode($imagePaths), 
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,
@@ -140,15 +147,20 @@ class OrderController extends Controller
                 'note'        => 'Yêu cầu hoàn tiền: ' . $request->bank_name . ' - STK: ' . $request->account_number,
             ]);
 
-            Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
+            // Gửi thông báo (Sử dụng try-catch để tránh crash nếu mail lỗi)
+            try {
+                Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
+            } catch (\Exception $e) {
+                Log::warning("Notification failed: " . $e->getMessage());
+            }
 
             DB::commit();
-            return back()->with('success', 'Gửi yêu cầu thành công! Ảnh đã được lưu trên Cloudinary.');
+            return back()->with('success', 'Gửi yêu cầu thành công!');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Return Upload Error: " . $e->getMessage());
-            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+            Log::error("General Return Error: " . $e->getMessage());
+            return back()->with('error', 'Đã xảy ra lỗi: ' . $e->getMessage());
         }
     }
 
@@ -178,8 +190,6 @@ class OrderController extends Controller
                 'user_id'     => Auth::id(),
                 'note'        => $request->note ?? 'Khách hàng chủ động hủy đơn.',
             ]);
-
-            Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
 
             DB::commit();
             return back()->with('success', 'Đơn hàng đã được hủy thành công.');
