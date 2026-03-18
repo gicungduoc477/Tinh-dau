@@ -12,20 +12,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
-use App\Notifications\OrderPlacedNotification; // Import Notification
+use App\Notifications\OrderPlacedNotification;
 use Carbon\Carbon;
 
 class OrderController extends Controller
 {
     public function __construct()
     {
-        // Bảo vệ các route, ngoại trừ trang chi tiết cho khách vãng lai
         $this->middleware('auth')->except(['show']);
     }
 
-    /**
-     * Hiển thị danh sách đơn hàng của người dùng
-     */
     public function index()
     {
         $orders = Order::where('user_id', Auth::id())
@@ -36,9 +32,6 @@ class OrderController extends Controller
         return view('orders.index', compact('orders'));
     }
 
-    /**
-     * Hiển thị chi tiết đơn hàng (Bổ sung logic thời gian hoàn hàng)
-     */
     public function show($id)
     {
         $orderQuery = Order::with(['items.product', 'statusHistories']);
@@ -56,7 +49,6 @@ class OrderController extends Controller
 
         if (!$order) abort(404);
 
-        // --- BỔ SUNG LOGIC THỜI GIAN HOÀN HÀNG ---
         $canReturn = false;
         $remainingTime = null;
 
@@ -67,18 +59,15 @@ class OrderController extends Controller
             if ($now->lt($expiryDate)) {
                 $canReturn = true;
                 $diff = $now->diff($expiryDate);
-                
-                // Định dạng hiển thị: X ngày Y giờ
                 $remainingTime = $diff->d . ' ngày ' . $diff->h . ' giờ';
             }
         }
-        // ------------------------------------------
 
         return view('orders.show', compact('order', 'canReturn', 'remainingTime'));
     }
 
     /**
-     * Khách hàng gửi yêu cầu Khiếu nại / Trả hàng
+     * CẬP NHẬT: Gửi yêu cầu Khiếu nại (Dùng Storage Disk Public)
      */
     public function requestReturn(Request $request, $id)
     {
@@ -109,19 +98,16 @@ class OrderController extends Controller
             $imagePath = null;
             if ($request->hasFile('return_image') && $request->file('return_image')->isValid()) {
                 try {
+                    // THAY ĐỔI: Sử dụng Storage::disk('public') để lưu vào storage/app/public/returns
+                    // Cách này tự động tạo thư mục và phân quyền ghi đúng trên Linux/Render
                     $file = $request->file('return_image');
-                    $extension = strtolower($file->getClientOriginalExtension());
-                    $filename = time() . '_' . Str::random(8) . '.' . $extension;
-                    $destinationPath = public_path('uploads/returns');
-
-                    if (!File::isDirectory($destinationPath)) {
-                        File::makeDirectory($destinationPath, 0755, true, true);
-                    }
-
-                    $file->move($destinationPath, $filename);
-                    $imagePath = 'uploads/returns/' . $filename;
+                    $path = $file->store('returns', 'public');
+                    
+                    // Lưu đường dẫn này vào DB. Vì đã storage:link nên link sẽ là storage/returns/...
+                    $imagePath = 'storage/' . $path;
+                    
                 } catch (\Exception $e) {
-                    DB::rollBack(); // Rollback on image upload failure
+                    DB::rollBack();
                     Log::error("Return Image Upload Error: " . $e->getMessage());
                     return back()->with('error', 'Lỗi tải lên ảnh: ' . $e->getMessage());
                 }
@@ -133,7 +119,7 @@ class OrderController extends Controller
             $order->update([
                 'status'         => $newStatus,
                 'return_reason'  => $request->return_reason,
-                'return_image'   => $imagePath,
+                'return_image'   => $imagePath, // Lưu path mới
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,
@@ -148,7 +134,6 @@ class OrderController extends Controller
                 'note'        => 'Khách yêu cầu hoàn tiền về: ' . $request->bank_name . ' - STK: ' . $request->account_number,
             ]);
 
-            // GỬI THÔNG BÁO CHO KHÁCH HÀNG (Hiển thị ở chuông)
             Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
 
             DB::commit();
@@ -156,13 +141,11 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error("General Return Error: " . $e->getMessage());
             return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Khách hàng chủ động hủy đơn
-     */
     public function cancel(Request $request, $id)
     {
         $order = Order::where('user_id', Auth::id())
@@ -190,7 +173,6 @@ class OrderController extends Controller
                 'note'        => $request->note ?? 'Khách hàng chủ động hủy đơn hàng.',
             ]);
 
-            // GỬI THÔNG BÁO CHO KHÁCH HÀNG (Hiển thị ở chuông)
             Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
 
             DB::commit();
