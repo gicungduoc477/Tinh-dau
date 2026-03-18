@@ -11,7 +11,6 @@
     .img-evidence { max-width: 150px; transition: transform 0.2s; cursor: pointer; }
     .img-evidence:hover { transform: scale(1.05); }
     
-    /* Hiệu ứng nút đánh giá */
     .btn-review { 
         background-color: #ff9800; 
         color: white; 
@@ -43,7 +42,6 @@
                         {{ $order->status_label }}
                     </span>
 
-                    {{-- NÚT KHIẾU NẠI --}}
                     @if(method_exists($order, 'canBeReturned') && $order->canBeReturned())
                         <button type="button" class="btn btn-link text-danger btn-sm fw-bold text-decoration-none ms-lg-auto" data-bs-toggle="modal" data-bs-target="#returnModal">
                             Khiếu nại / Trả hàng
@@ -51,18 +49,27 @@
                     @endif
                 </div>
 
-                {{-- THÔNG TIN KHIẾU NẠI & ẢNH MINH CHỨNG --}}
+                {{-- PHẦN SỬA LỖI: HIỂN THỊ THÔNG TIN KHIẾU NẠI & ẢNH MINH CHỨNG --}}
                 @if(in_array($order->status, ['returning', 'returned', 'refunding', 'refunded']))
                     <div class="alert alert-secondary border-0 rounded-4 mb-4">
                         <div class="row mt-2">
                             <div class="col-md-6 border-end">
                                 <p class="mb-1 small text-muted">Lý do khiếu nại: <strong>{{ $order->return_reason }}</strong></p>
                                 
-                                @if($order->return_image && is_array($order->return_image))
+                                {{-- XỬ LÝ GIẢI MÃ JSON ẢNH --}}
+                                @php
+                                    $images = [];
+                                    if($order->return_image) {
+                                        // Nếu nó đã là mảng (do Cast) thì dùng luôn, nếu là string thì decode
+                                        $images = is_array($order->return_image) ? $order->return_image : json_decode($order->return_image, true);
+                                    }
+                                @endphp
+
+                                @if(!empty($images) && is_array($images))
                                     <div class="mt-2">
                                         <p class="mb-1 small text-muted">Ảnh minh chứng:</p>
                                         <div class="d-flex flex-wrap gap-2">
-                                            @foreach($order->return_image as $imageUrl)
+                                            @foreach($images as $imageUrl)
                                                 <img src="{{ $imageUrl }}" class="rounded-3 shadow-sm border img-evidence" 
                                                      style="width: 100px; height: 100px; object-fit: cover;"
                                                      onclick="window.open(this.src)"
@@ -152,7 +159,7 @@
     </div>
 </div>
 
-{{-- MODAL KHIẾU NẠI --}}
+{{-- MODAL KHIẾU NẠI GIỮ NGUYÊN NHƯ CŨ --}}
 <div class="modal fade" id="returnModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -174,6 +181,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Ảnh minh chứng <span class="text-danger">*</span></label>
+                        {{-- Quan trọng: name="return_images[]" và multiple để khớp với Controller xử lý mảng --}}
                         <input type="file" name="return_images[]" class="form-control rounded-3" accept="image/*" required multiple>
                     </div>
                     <div class="bg-light p-3 rounded-4 mb-3 border">
