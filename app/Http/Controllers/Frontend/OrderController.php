@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Notifications\OrderPlacedNotification;
-// Gọi trực tiếp Facade SDK giống Admin
+// Sử dụng Facade Cloudinary SDK thủ công
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class OrderController extends Controller
@@ -51,7 +51,7 @@ class OrderController extends Controller
         $remainingTime = null;
 
         if ($order->status === 'success' && $order->updated_at) {
-            $expiryDate = $order->updated_at->addDays(7);
+            $expiryDate = $order->updated_at->addDays(Order::RETURN_LIMIT_DAYS);
             $now = now();
 
             if ($now->lt($expiryDate)) {
@@ -65,7 +65,8 @@ class OrderController extends Controller
     }
 
     /**
-     * Gửi yêu cầu Khiếu nại - SỬ DỤNG SDK THỦ CÔNG GIỐNG ADMIN
+     * Gửi yêu cầu Khiếu nại - Sử dụng SDK thủ công giống Admin
+     * Đã tối ưu việc lấy URL từ kết quả Cloudinary
      */
     public function requestReturn(Request $request, $id)
     {
@@ -84,6 +85,8 @@ class OrderController extends Controller
             'bank_name'       => 'required|string|max:100',
             'account_number'  => 'required|string|max:30',
             'account_holder'  => 'required|string|max:100',
+        ], [
+            'return_images.required' => 'Vui lòng cung cấp ít nhất một hình ảnh làm bằng chứng.',
         ]);
 
         try {
@@ -93,66 +96,80 @@ class OrderController extends Controller
             if ($request->hasFile('return_images')) {
                 foreach ($request->file('return_images') as $file) {
                     if ($file->isValid()) {
-                        // GỌI SDK THỦ CÔNG
                         try {
+                            // Gọi SDK thủ công giống Admin
                             $result = Cloudinary::upload($file->getRealPath(), [
-                                'folder' => 'returns',
+                                'folder' => 'returns', // Thư mục bạn đã tạo trên Cloudinary
                                 'transformation' => [
                                     'quality' => 'auto',
                                     'fetch_format' => 'auto'
                                 ]
                             ]);
 
-                            // KIỂM TRA CHẶN LỖI NULL OFFSET:
-                            // SDK có thể trả về Object hoặc Array tùy phiên bản/cấu hình
-                            if (is_object($result) && method_exists($result, 'getSecurePath')) {
-                                $imagePaths[] = $result->getSecurePath();
-                            } elseif (is_array($result) && isset($result['secure_url'])) {
-                                $imagePaths[] = $result['secure_url'];
-                            } elseif (is_object($result) && isset($result->secure_url)) {
-                                // Một số trường hợp trả về StdClass
-                                $imagePaths[] = $result->secure_url;
+                            // Xử lý lấy URL tuyệt đối an toàn (getSecurePath hoặc secure_url)
+                            $url = null;
+                            if (is_object($result)) {
+                                $url = method_exists($result, 'getSecurePath') ? $result->getSecurePath() : ($result->secure_url ?? null);
+                            } elseif (is_array($result)) {
+                                $url = $result['secure_url'] ?? null;
+                            }
+
+                            if ($url) {
+                                $imagePaths[] = $url;
                             } else {
-                                Log::error("Cloudinary trả về kết quả không xác định: " . json_encode($result));
+                                Log::error("Cloudinary trả về kết quả không hợp lệ cho file: " . $file->getClientOriginalName());
                             }
                             
-                        } catch (\Exception $e) {
-                            Log::error("Lỗi khi gọi SDK Cloudinary: " . $e->getMessage());
+                        } catch (\Exception $uploadError) {
+                            Log::error("Lỗi upload từng file: " . $uploadError->getMessage());
                             continue; 
                         }
                     }
                 }
             }
 
+            // Kiểm tra nếu không có ảnh nào được upload thành công
             if (empty($imagePaths)) {
-                throw new \Exception("Không thể lấy được URL ảnh từ Cloudinary. Vui lòng kiểm tra lại cấu hình API.");
+                throw new \Exception("Hệ thống không thể lấy được URL ảnh từ Cloudinary. Vui lòng kiểm tra lại cấu hình hoặc thư mục 'returns'.");
             }
 
+            $oldStatus = $order->status;
+            $newStatus = 'returning';
+
+            // Cập nhật thông tin khiếu nại
             $order->update([
-                'status'         => 'returning',
+                'status'         => $newStatus,
                 'return_reason'  => $request->return_reason,
-                'return_image'   => $imagePaths, // Gửi mảng, Model Cast 'array' tự lo JSON
+                'return_image'   => $imagePaths, // Lưu mảng (Model Order sẽ tự cast sang JSON)
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,
                 'account_holder' => $request->account_holder,
             ]);
 
+            // Lưu lịch sử
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
-                'from_status' => $order->getOriginal('status'),
-                'to_status'   => 'returning',
+                'from_status' => $oldStatus,
+                'to_status'   => $newStatus,
                 'user_id'     => Auth::id(),
-                'note'        => 'Yêu cầu hoàn tiền qua SDK thủ công.',
+                'note'        => 'Khách gửi khiếu nại kèm STK: ' . $request->account_number,
             ]);
 
+            // Thông báo (nếu có)
+            try {
+                Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
+            } catch (\Exception $notifyError) {
+                Log::warning("Không thể gửi thông báo: " . $notifyError->getMessage());
+            }
+
             DB::commit();
-            return back()->with('success', 'Gửi khiếu nại thành công!');
+            return back()->with('success', 'Gửi yêu cầu khiếu nại thành công!');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Return Error: " . $e->getMessage());
-            return back()->with('error', 'Lỗi hệ thống: ' . $e->getMessage());
+            Log::error("Lỗi khiếu nại: " . $e->getMessage());
+            return back()->with('error', 'Đã xảy ra lỗi: ' . $e->getMessage());
         }
     }
 
@@ -178,14 +195,14 @@ class OrderController extends Controller
                 'from_status' => $oldStatus,
                 'to_status' => 'canceled',
                 'user_id' => Auth::id(),
-                'note' => $request->note ?? 'Hủy đơn hàng.',
+                'note' => $request->note ?? 'Khách hàng hủy đơn.',
             ]);
 
             DB::commit();
-            return back()->with('success', 'Hủy đơn thành công.');
+            return back()->with('success', 'Đơn hàng đã được hủy.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi khi hủy đơn: ' . $e->getMessage());
         }
     }
 }
