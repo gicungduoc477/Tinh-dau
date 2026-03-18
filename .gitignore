@@ -1,24 +1,26 @@
-*.log
-.DS_Store
+/node_modules
+/vendor
 .env
 .env.backup
 .env.production
-.phpactor.json
 .phpunit.result.cache
-/.fleet
-/.idea
-/.nova
-/.phpunit.cache
-/.vscode
-/.zed
-/auth.json
-/node_modules
+/*.log
+.DS_Store
+Thumbs.db
+
+# Giữ lại thư mục public nhưng bỏ qua các file build tạm
 /public/build
 /public/hot
 /public/storage
+
+# Laravel storage
 /storage/*.key
-/storage/pail
-/vendor
-Homestead.json
-Homestead.yaml
-Thumbs.db
+/storage/app/public/*
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+
+# Editor folders
+.idea/
+.vscode/
