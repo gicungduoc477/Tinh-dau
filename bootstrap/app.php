@@ -4,6 +4,7 @@ $app = new Illuminate\Foundation\Application(
     $_ENV['APP_BASE_PATH'] ?? dirname(__DIR__)
 );
 
+// Laravel mặc định dùng App\Console\Kernel, không phải App\Http\Console
 $app->singleton(
     Illuminate\Contracts\Http\Kernel::class,
     App\Http\Kernel::class
@@ -11,7 +12,7 @@ $app->singleton(
 
 $app->singleton(
     Illuminate\Contracts\Console\Kernel::class,
-    App\Http\Console\Kernel::class
+    App\Console\Kernel::class
 );
 
 $app->singleton(
