@@ -94,10 +94,19 @@ class Order extends Model
      */
     public function canBeReturned(): bool
     {
-        if ($this->status !== 'success') return false;
-        
-        $expiryDate = $this->updated_at->copy()->addDays(self::RETURN_LIMIT_DAYS);
-        return Carbon::now()->lessThanOrEqualTo($expiryDate);
+        // Allow returns for 'shipping' and 'success' statuses
+        if (!in_array($this->status, ['success', 'shipping'])) {
+            return false;
+        }
+
+        // If status is 'success', check if it's within the return period
+        if ($this->status === 'success') {
+            $expiryDate = $this->updated_at->copy()->addDays(self::RETURN_LIMIT_DAYS);
+            return Carbon::now()->lessThanOrEqualTo($expiryDate);
+        }
+
+        // Always allow returns if status is 'shipping'
+        return true;
     }
 
     // =========================================================================
