@@ -80,7 +80,8 @@ class OrderController extends Controller
 
         $request->validate([
             'return_reason'  => 'required|string|max:255',
-            'return_image'   => 'required|image|mimes:jpeg,png,jpg|max:2048',
+            'return_images'   => 'required|array', // Chấp nhận một mảng các file
+            'return_images.*' => 'image|mimes:jpeg,png,jpg|max:2048', // Validate từng file trong mảng
             'return_note'    => 'nullable|string|max:500',
             'bank_name'      => 'required|string|max:100',
             'account_number' => 'required|string|max:30',
@@ -89,36 +90,40 @@ class OrderController extends Controller
             'bank_name.required' => 'Vui lòng nhập tên ngân hàng để nhận tiền hoàn.',
             'account_number.required' => 'Vui lòng nhập số tài khoản.',
             'account_holder.required' => 'Vui lòng nhập tên chủ tài khoản.',
+            'return_images.required' => 'Vui lòng cung cấp ít nhất một hình ảnh làm bằng chứng.',
+            'return_images.*.image' => 'Tất cả các file phải là hình ảnh.',
+            'return_images.*.mimes' => 'Chỉ chấp nhận hình ảnh định dạng jpeg, png, jpg.',
         ]);
 
         try {
             DB::beginTransaction();
 
-            $imagePath = null;
-            if ($request->hasFile('return_image') && $request->file('return_image')->isValid()) {
-                try {
-                    /**
-                     * THAY ĐỔI QUAN TRỌNG: 
-                     * Upload trực tiếp lên Cloudinary vào thư mục 'returns'
-                     * Không phụ thuộc vào ổ cứng server Render
-                     */
-                    $uploadedFile = Cloudinary::upload($request->file('return_image')->getRealPath(), [
-                        'folder' => 'returns',
-                        'transformation' => [
-                            'quality' => 'auto',
-                            'fetch_format' => 'auto'
-                        ]
-                    ]);
-                    
-                    // Lấy URL bảo mật (HTTPS) từ Cloudinary để lưu vào DB
-                    $imagePath = $uploadedFile->getSecurePath();
-                    
-                } catch (\Exception $e) {
-                    DB::rollBack();
-                    Log::error("Cloudinary Return Upload Error: " . $e->getMessage());
-                    return back()->with('error', 'Lỗi tải lên Cloudinary: ' . $e->getMessage());
+            $imagePaths = []; // Mảng để lưu URLs từ Cloudinary
+            if ($request->hasFile('return_images')) {
+                foreach ($request->file('return_images') as $file) {
+                    if ($file->isValid()) {
+                        try {
+                            $uploadedFile = Cloudinary::upload($file->getRealPath(), [
+                                'folder' => 'returns',
+                                'transformation' => [
+                                    'quality' => 'auto',
+                                    'fetch_format' => 'auto'
+                                ]
+                            ]);
+                            $imagePaths[] = $uploadedFile->getSecurePath(); // Thêm URL vào mảng
+                        } catch (\Exception $e) {
+                            DB::rollBack();
+                            Log::error("Cloudinary Return Upload Error: " . $e->getMessage());
+                            return back()->with('error', 'Lỗi tải lên Cloudinary: ' . $e->getMessage());
+                        }
+                    }
                 }
             }
+
+            if (empty($imagePaths)) {
+                 return back()->with('error', 'Không có ảnh hợp lệ nào được tải lên.');
+            }
+
 
             $oldStatus = $order->status;
             $newStatus = 'returning';
@@ -126,7 +131,7 @@ class OrderController extends Controller
             $order->update([
                 'status'         => $newStatus,
                 'return_reason'  => $request->return_reason,
-                'return_image'   => $imagePath, // URL Cloudinary vĩnh viễn
+                'return_image'   => json_encode($imagePaths), // Lưu mảng URLs dưới dạng JSON
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,

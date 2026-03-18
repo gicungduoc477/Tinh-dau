@@ -58,25 +58,17 @@
                             <div class="col-md-6 border-end">
                                 <p class="mb-1 small text-muted">Lý do khiếu nại: <strong>{{ $order->return_reason }}</strong></p>
                                 
-                                @if($order->return_image)
-                                    @php
-                                        $rPath = ltrim($order->return_image, '/');
-                                        $storageFull = 'storage/' . (str_contains($rPath, 'returns/') ? $rPath : 'returns/' . $rPath);
-                                        $uploadsFull = 'uploads/product/' . (str_contains($rPath, 'returns/') ? $rPath : 'returns/' . $rPath);
-                                        
-                                        if (file_exists(public_path($storageFull))) {
-                                            $finalUrl = asset($storageFull);
-                                        } elseif (file_exists(public_path($uploadsFull))) {
-                                            $finalUrl = asset($uploadsFull);
-                                        } else {
-                                            $finalUrl = asset($storageFull);
-                                        }
-                                    @endphp
+                                @if($order->return_image && is_array($order->return_image))
                                     <div class="mt-2">
                                         <p class="mb-1 small text-muted">Ảnh minh chứng:</p>
-                                        <img src="{{ $finalUrl }}" class="rounded-3 shadow-sm border img-evidence" 
-                                             onclick="window.open(this.src)"
-                                             onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
+                                        <div class="d-flex flex-wrap gap-2">
+                                            @foreach($order->return_image as $imageUrl)
+                                                <img src="{{ $imageUrl }}" class="rounded-3 shadow-sm border img-evidence" 
+                                                     style="width: 100px; height: 100px; object-fit: cover;"
+                                                     onclick="window.open(this.src)"
+                                                     onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
+                                            @endforeach
+                                        </div>
                                     </div>
                                 @endif
                             </div>
@@ -182,7 +174,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Ảnh minh chứng <span class="text-danger">*</span></label>
-                        <input type="file" name="return_image" class="form-control rounded-3" accept="image/*" required>
+                        <input type="file" name="return_images[]" class="form-control rounded-3" accept="image/*" required multiple>
                     </div>
                     <div class="bg-light p-3 rounded-4 mb-3 border">
                         <p class="small fw-bold mb-2"><i class="fas fa-university me-2"></i>Thông tin nhận hoàn tiền</p>

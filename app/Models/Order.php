@@ -54,6 +54,7 @@ class Order extends Model
         'paid_at' => 'datetime',
         'total_price' => 'double',
         'shipping_fee' => 'double',
+        'return_image' => 'array', // Tự động chuyển JSON thành array và ngược lại
     ];
 
     /**
@@ -123,24 +124,6 @@ class Order extends Model
     // =========================================================================
     // TRÌNH TRÍCH XUẤT (ACCESSORS & MUTATORS)
     // =========================================================================
-
-    /**
-     * Accessor xử lý đường dẫn ảnh khiếu nại.
-     */
-    public function getReturnImageUrlAttribute(): ?string
-    {
-        if (!$this->return_image) return null;
-
-        if (filter_var($this->return_image, FILTER_VALIDATE_URL)) {
-            return $this->return_image;
-        }
-
-        if (Storage::disk('public')->exists($this->return_image)) {
-            return asset('storage/' . $this->return_image);
-        }
-
-        return "https://placehold.co/600x400?text=Image+Not+Found";
-    }
 
     /**
      * Lấy nhãn trạng thái tiếng Việt.
