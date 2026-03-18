@@ -1,8 +1,15 @@
 <?php
 
 return [
-    // Đây là dòng quan trọng nhất - Render sẽ dùng link này để kết nối
+    // Hỗ trợ link tổng hợp từ Render
     'cloud_url' => env('CLOUDINARY_URL'),
+
+    // Cấu trúc mảng 'cloud' để fix lỗi "Undefined array key 'cloud'"
+    'cloud' => [
+        'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+        'api_key'    => env('CLOUDINARY_API_KEY'),
+        'api_secret' => env('CLOUDINARY_API_SECRET'),
+    ],
 
     'upload' => [
         'use_filename' => true,
