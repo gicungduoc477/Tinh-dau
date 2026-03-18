@@ -32,6 +32,9 @@ RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available
 RUN printf "#!/bin/sh\n\
 php artisan migrate --force\n\
 php artisan config:clear\n\
+php artisan route:clear\n\
+php artisan view:clear\n\
+php artisan cache:clear\n\
 apache2-foreground" > /usr/local/bin/start-app.sh
 
 RUN chmod +x /usr/local/bin/start-app.sh
