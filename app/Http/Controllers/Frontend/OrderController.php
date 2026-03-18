@@ -5,15 +5,13 @@ namespace App\Http\Controllers\Frontend;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Notifications\OrderPlacedNotification;
-use Carbon\Carbon;
+// IMPORT Cloudinary SDK
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class OrderController extends Controller
 {
@@ -67,7 +65,8 @@ class OrderController extends Controller
     }
 
     /**
-     * CẬP NHẬT: Gửi yêu cầu Khiếu nại (Dùng Storage Disk Public)
+     * CẬP NHẬT THỰC TẾ: Gửi yêu cầu Khiếu nại dùng Cloudinary SDK
+     * Giải quyết triệt để vấn đề mất ảnh khi Deploy lại trên Render Free
      */
     public function requestReturn(Request $request, $id)
     {
@@ -98,18 +97,26 @@ class OrderController extends Controller
             $imagePath = null;
             if ($request->hasFile('return_image') && $request->file('return_image')->isValid()) {
                 try {
-                    // THAY ĐỔI: Sử dụng Storage::disk('public') để lưu vào storage/app/public/returns
-                    // Cách này tự động tạo thư mục và phân quyền ghi đúng trên Linux/Render
-                    $file = $request->file('return_image');
-                    $path = $file->store('returns', 'public');
+                    /**
+                     * THAY ĐỔI QUAN TRỌNG: 
+                     * Upload trực tiếp lên Cloudinary vào thư mục 'returns'
+                     * Không phụ thuộc vào ổ cứng server Render
+                     */
+                    $uploadedFile = Cloudinary::upload($request->file('return_image')->getRealPath(), [
+                        'folder' => 'returns',
+                        'transformation' => [
+                            'quality' => 'auto',
+                            'fetch_format' => 'auto'
+                        ]
+                    ]);
                     
-                    // Lưu đường dẫn này vào DB. Vì đã storage:link nên link sẽ là storage/returns/...
-                    $imagePath = 'storage/' . $path;
+                    // Lấy URL bảo mật (HTTPS) từ Cloudinary để lưu vào DB
+                    $imagePath = $uploadedFile->getSecurePath();
                     
                 } catch (\Exception $e) {
                     DB::rollBack();
-                    Log::error("Return Image Upload Error: " . $e->getMessage());
-                    return back()->with('error', 'Lỗi tải lên ảnh: ' . $e->getMessage());
+                    Log::error("Cloudinary Return Upload Error: " . $e->getMessage());
+                    return back()->with('error', 'Lỗi tải lên Cloudinary: ' . $e->getMessage());
                 }
             }
 
@@ -119,7 +126,7 @@ class OrderController extends Controller
             $order->update([
                 'status'         => $newStatus,
                 'return_reason'  => $request->return_reason,
-                'return_image'   => $imagePath, // Lưu path mới
+                'return_image'   => $imagePath, // URL Cloudinary vĩnh viễn
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,
@@ -137,7 +144,7 @@ class OrderController extends Controller
             Auth::user()->notify(new OrderPlacedNotification($order, 'updated'));
 
             DB::commit();
-            return back()->with('success', 'Yêu cầu trả hàng đã được gửi thành công. Shop sẽ kiểm tra và phản hồi sớm nhất.');
+            return back()->with('success', 'Yêu cầu trả hàng đã được gửi thành công. Ảnh bằng chứng đã được lưu vĩnh viễn trên Cloudinary.');
 
         } catch (\Exception $e) {
             DB::rollBack();
