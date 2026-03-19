@@ -11,7 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Thêm các middleware vào đây nếu cần
+        // 1. Tin tưởng Proxy của Render để nhận diện đúng giao thức HTTPS
+        $middleware->trustProxies(at: '*');
+
+        // 2. Đảm bảo các link trong ứng dụng luôn dùng HTTPS khi chạy thực tế
+        // (Bạn cũng có thể cấu hình thêm ở AppServiceProvider nếu muốn triệt để hơn)
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Cấu hình xử lý lỗi tại đây
