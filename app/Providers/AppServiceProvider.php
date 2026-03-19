@@ -38,19 +38,7 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        // 3. CẤU HÌNH CLOUDINARY
-        // Đồng bộ cấu hình từ .env vào hệ thống config của Laravel
-        config([
-            'cloudinary.cloud_url' => env('CLOUDINARY_URL'),
-            'cloudinary.cloud' => [
-                'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-                'api_key'    => env('CLOUDINARY_API_KEY'),
-                'api_secret' => env('CLOUDINARY_API_SECRET'),
-            ],
-            'cloudinary.upload' => [
-                'folder' => env('CLOUDINARY_FOLDER', 'tinh_dau_shop/products'),
-            ],
-        ]);
+        // 3. CẤU HÌNH CLOUDINARY (Đã chuyển sang file config/cloudinary.php)
 
         // 4. ĐĂNG KÝ DRIVER BREVO (MAILER)
         // Cho phép gửi mail qua API Brevo thay vì SMTP truyền thống

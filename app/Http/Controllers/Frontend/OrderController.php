@@ -98,9 +98,9 @@ class OrderController extends Controller
 
             $imagePaths = [];
             
-            // Kiểm tra cấu hình Cloudinary trước khi upload để tránh lỗi đỏ
-            if (!config('cloudinary.cloud_url') && !env('CLOUDINARY_URL')) {
-                throw new \Exception("Hệ thống chưa cấu hình Cloudinary Cloud URL.");
+            // Kiểm tra cấu hình Cloudinary trước khi upload để tránh lỗi
+            if (!config('cloudinary.cloud_url')) {
+                throw new \Exception("Hệ thống chưa cấu hình Cloudinary Cloud URL. Vui lòng kiểm tra lại file .env và chạy 'php artisan config:cache'.");
             }
 
             if ($request->hasFile('return_images')) {
