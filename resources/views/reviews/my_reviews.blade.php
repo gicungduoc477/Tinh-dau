@@ -128,12 +128,16 @@
                                 <div class="mt-2">
                                     @php
                                         $rMedia = ltrim($review->image, '/');
-                                        if(str_starts_with($rMedia, 'http')) {
+                                        if (str_starts_with($rMedia, 'http')) {
                                             $finalMediaUrl = $rMedia;
                                         } else {
-                                            $finalMediaUrl = file_exists(public_path('storage/' . $rMedia)) 
-                                                             ? asset('storage/' . $rMedia) 
-                                                             : asset('uploads/reviews/' . $rMedia);
+                                            if (str_contains($rMedia, 'uploads/product/')) {
+                                                $finalMediaUrl = asset($rMedia);
+                                            } else {
+                                                $finalMediaUrl = file_exists(public_path('uploads/product/' . $rMedia))
+                                                                 ? asset('uploads/product/' . $rMedia)
+                                                                 : asset('storage/' . $rMedia);
+                                            }
                                         }
                                         $extension = strtolower(pathinfo($finalMediaUrl, PATHINFO_EXTENSION));
                                         $isVideo = in_array($extension, ['mp4', 'mov', 'webm', 'ogg']);

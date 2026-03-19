@@ -24,38 +24,36 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // 1. Cấu hình phân trang Bootstrap 5
+        // 1. CẤU HÌNH PHÂN TRANG BOOTSTRAP 5
+        // Laravel sẽ render HTML theo cấu trúc của Bootstrap 5
         Paginator::useBootstrapFive();
 
         // 2. ÉP DÙNG HTTPS VÀ XỬ LÝ PROXY TRÊN RENDER
+        // Giúp fix lỗi Mixed Content (mất CSS/JS) khi chạy trên server Render/Heroku
         if (config('app.env') !== 'local') {
-            // Ép tất cả URL được tạo ra (asset, route) phải dùng https
             URL::forceScheme('https');
             
-            // Fix lỗi mất giao diện CSS/JS do Mixed Content trên Render
             if (isset($this->app['request'])) {
                 $this->app['request']->server->set('HTTPS', true);
             }
         }
 
-        // 3. CẤU HÌNH CLOUDINARY (Fix triệt để Undefined array key "cloud")
-        // Nạp cấu hình từ ENV vào Config để ghi đè mọi cache cũ trên server
-        if (env('CLOUDINARY_URL') || env('CLOUDINARY_CLOUD_NAME')) {
-            config([
-                'cloudinary.cloud_url' => env('CLOUDINARY_URL'),
-                'cloudinary.cloud' => [
-                    'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-                    'api_key'    => env('CLOUDINARY_API_KEY'),
-                    'api_secret' => env('CLOUDINARY_API_SECRET'),
-                ],
-                // Thêm defaults để thư viện không báo lỗi thiếu index
-                'cloudinary.upload' => [
-                    'folder' => env('CLOUDINARY_FOLDER', 'tinh_dau_shop/products'),
-                ],
-            ]);
-        }
+        // 3. CẤU HÌNH CLOUDINARY
+        // Nạp cấu hình từ .env vào config hệ thống
+        config([
+            'cloudinary.cloud_url' => env('CLOUDINARY_URL'),
+            'cloudinary.cloud' => [
+                'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+                'api_key'    => env('CLOUDINARY_API_KEY'),
+                'api_secret' => env('CLOUDINARY_API_SECRET'),
+            ],
+            'cloudinary.upload' => [
+                'folder' => env('CLOUDINARY_FOLDER', 'tinh_dau_shop/products'),
+            ],
+        ]);
 
-        // 4. ĐĂNG KÝ DRIVER BREVO (Fix lỗi Unsupported mail transport)
+        // 4. ĐĂNG KÝ DRIVER BREVO
+        // Hỗ trợ gửi mail qua API Brevo
         if (env('BREVO_API_KEY')) {
             Mail::extend('brevo', function (array $config) {
                 return (new BrevoTransportFactory)->create(

@@ -1,10 +1,10 @@
 <?php
 
 return [
-    // Hỗ trợ link tổng hợp từ Render (CLOUDINARY_URL=cloudinary://key:secret@name)
+    // Hỗ trợ link tổng hợp từ Render (CLOUDINARY_URL)
     'cloud_url' => env('CLOUDINARY_URL'),
 
-    // Cấu trúc mảng 'cloud' để fix lỗi "Undefined array key 'cloud'"
+    // Cấu trúc mảng 'cloud' để fix triệt để lỗi "Undefined array key 'cloud'"
     'cloud' => [
         'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
         'api_key'    => env('CLOUDINARY_API_KEY'),
@@ -20,6 +20,6 @@ return [
     'defaults' => [
         'format' => 'auto',
         'quality' => 'auto',
-        'secure' => true,
+        'secure' => true, // Ép link ảnh trả về là https
     ],
 ];

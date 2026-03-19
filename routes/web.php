@@ -212,12 +212,13 @@ Route::controller(PaymentController::class)->group(function () {
     Route::post('/payment/webhook', 'handleWebhook')->name('payment.webhook');
 });
 
-// Lệnh 1: Reset Cache & Kích hoạt Storage Link (QUAN TRỌNG CHO RENDER)
+// Lệnh 1: Reset Cache triệt để (Chạy sau khi deploy)
 Route::get('/fix-system', function () {
     try {
         Artisan::call('optimize:clear');
-        Artisan::call('storage:link', ['--force' => true]); // Tự động tạo lại link storage bị mất
-        return "<h3>HỆ THỐNG ĐÃ LÀM MỚI CACHE VÀ STORAGE LINK!</h3><a href='/'>Về trang chủ</a>";
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+        return "<h3>HỆ THỐNG ĐÃ LÀM MỚI CACHE!</h3><a href='/'>Về trang chủ</a>";
     } catch (\Exception $e) {
         return "Lỗi: " . $e->getMessage();
     }
@@ -242,12 +243,14 @@ Route::get('/clean-products', function () {
     }
 });
 
-// Lệnh 3: Kích hoạt Seeder
+// Lệnh 3: Kích hoạt Seeder để đổ 20 sản phẩm lên Cloudinary
 Route::get('/seed-products', function () {
     try {
+        // Tăng thời gian thực thi vì upload 20 ảnh lên Cloudinary rất lâu
         set_time_limit(300); 
+        
         Artisan::call('db:seed', ['--class' => 'ProductSeeder']);
-        return "<h3>ĐÃ ĐỔ DỮ LIỆU THÀNH CÔNG!</h3><a href='/admin/product'>Đến trang quản lý sản phẩm</a>";
+        return "<h3>ĐÃ ĐỔ DỮ LIỆU VÀ UPLOAD ẢNH LÊN CLOUDINARY THÀNH CÔNG!</h3><a href='/admin/product'>Đến trang quản lý sản phẩm</a>";
     } catch (\Exception $e) {
         return "Lỗi Seeding: " . $e->getMessage();
     }

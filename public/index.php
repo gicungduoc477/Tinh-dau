@@ -4,16 +4,14 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// 1. Kiểm tra chế độ bảo trì
+// Xác định xem ứng dụng có đang ở chế độ bảo trì không...
 if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
     require $maintenance;
 }
 
-// 2. Đăng ký Composer Autoloader
+// Đăng ký bộ nạp tự động của Composer...
 require __DIR__.'/../vendor/autoload.php';
 
-// 3. Khởi tạo Laravel và xử lý Request
-// Đảm bảo đường dẫn tới bootstrap/app.php chính xác
-$app = require_once __DIR__.'/../bootstrap/app.php';
-
-$app->handleRequest(Request::capture());
+// Khởi động Laravel và xử lý yêu cầu...
+(require_once __DIR__.'/../bootstrap/app.php')
+    ->handleRequest(Request::capture());

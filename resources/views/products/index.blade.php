@@ -133,6 +133,38 @@
     .owl-carousel .item img { border-radius: 20px; height: 200px; object-fit: cover; }
     .owl-carousel .item .img-container { overflow: hidden; border-radius: 15px; }
 
+    /* FIX LỖI MŨI TÊN KHỔNG LỒ (FIXED) */
+    .ajax-pagination svg {
+        width: 1.25rem; /* ~20px */
+        height: 1.25rem;
+    }
+    .ajax-pagination .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 5px;
+        padding-left: 0;
+        list-style: none;
+    }
+    /* Ẩn phần text "Showing X to Y" của Laravel mặc định nếu nó gây xấu */
+    .ajax-pagination nav div:first-child {
+        display: none !important;
+    }
+    .ajax-pagination .page-link {
+        border-radius: 10px !important;
+        border: 1px solid #edf2f7;
+        color: #4a5568;
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        transition: all 0.2s;
+    }
+    .ajax-pagination .page-item.active .page-link {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+        color: white;
+    }
+
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 @endpush
@@ -224,7 +256,7 @@
         <div class="text-center mb-4">
             <h2 class="fw-bold">Tìm Kiếm Mùi Hương Của Bạn</h2>
         </div>
-        <form action="{{ route('products.search') }}" method="GET" class="search-bar">
+        <form action="{{ route('products.search') }}" method="GET" class="search-bar" id="search-form-ajax">
             <input type="text" name="q" class="form-control" placeholder="Ví dụ: Tinh dầu Bạc Hà, Sả Chanh..." value="{{ request('q') }}">
             <button type="submit" class="btn shadow-sm">Tìm kiếm ngay</button>
         </form>
@@ -282,11 +314,7 @@
                                 <a href="{{ route('products.show', $product->slug) }}">
                                     @php
                                         if ($product->image) {
-                                            if (Illuminate\Support\Str::startsWith($product->image, 'http')) {
-                                                $displayUrl = $product->image;
-                                            } else {
-                                                $displayUrl = asset($product->image);
-                                            }
+                                            $displayUrl = Illuminate\Support\Str::startsWith($product->image, 'http') ? $product->image : asset($product->image);
                                         } else {
                                             $displayUrl = asset('backend/img/no-image.png');
                                         }
@@ -315,7 +343,7 @@
                 </div>
 
                 <div class="mt-5 d-flex justify-content-center ajax-pagination">
-                    {{ $products->links() }}
+                    {{ $products->appends(request()->query())->links() }}
                 </div>
             </div>
 
@@ -346,48 +374,37 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
 
 <script>
-    // Khởi tạo WOW.js
     new WOW().init();
 
     $(document).ready(function(){
-        // Khởi tạo Owl Carousel
+        // Owl Carousel
         $('.owl-carousel').owlCarousel({ 
             loop:true, margin:15, nav:false, autoplay:true, 
             autoplayTimeout:3000, autoplayHoverPause:true, 
             responsive:{ 0:{ items:1 }, 600:{ items:3 }, 1000:{ items:5 } } 
         });
 
-        // --- XỬ LÝ AJAX LỌC SẢN PHẨM ---
-        $(document).on('click', '.filter-ajax, .ajax-pagination a', function(e) {
-            e.preventDefault();
-            
-            let url = $(this).data('url') || $(this).attr('href');
+        function loadProducts(url) {
             if(!url || url === 'javascript:void(0)') return;
 
-            // Hiệu ứng loading
             $('#loader').css('display', 'flex');
             $('#product-data').css('opacity', '0.5');
 
             $.ajax({
                 url: url,
                 type: 'GET',
+                dataType: 'html',
                 success: function(response) {
-                    // Lấy nội dung mới từ response
                     let newContent = $(response).find('#product-data').html();
                     $('#product-data').html(newContent);
-                    
-                    // Cập nhật URL trình duyệt
                     window.history.pushState({path: url}, '', url);
                     
-                    // Cập nhật Active State
                     $('.filter-ajax').removeClass('active');
-                    $(`.filter-ajax[data-url="${url}"], .filter-ajax[href="${url}"]`).addClass('active');
+                    $(`.filter-ajax[data-url="${url}"]`).addClass('active');
 
-                    // Khởi tạo lại các hiệu ứng
                     new WOW().init();
-                    $('html, body').animate({ scrollTop: $("#product-list").offset().top - 100 }, 500);
+                    $('html, body').animate({ scrollTop: $("#product-list").offset().top - 100 }, 400);
 
-                    // Tắt loading
                     $('#loader').hide();
                     $('#product-data').css('opacity', '1');
                 },
@@ -396,25 +413,33 @@
                     $('#product-data').css('opacity', '1');
                 }
             });
+        }
+
+        $(document).on('click', '.filter-ajax', function(e) {
+            e.preventDefault();
+            let url = $(this).data('url');
+            loadProducts(url);
         });
 
-        // --- HIỆU ỨNG MƯA RƠI ---
+        $(document).on('click', '.ajax-pagination a', function(e) {
+            e.preventDefault();
+            let url = $(this).attr('href');
+            if (url) {
+                loadProducts(url);
+            }
+        });
+
+        // Hiệu ứng mưa rơi
         function createDrop() {
             const container = document.getElementById('rainContainer');
             if(!container) return;
-            
             const drop = document.createElement('div');
             drop.classList.add('drop');
-            
             const leftPos = Math.random() * 100;
             const duration = 2 + (Math.random() * 2); 
-            
             drop.style.left = leftPos + '%';
             drop.style.animationDuration = duration + 's';
-            
             container.appendChild(drop);
-
-            // Tạo ripple khi giọt nước "chạm đất"
             setTimeout(() => {
                 createRipple(leftPos);
                 drop.remove();
@@ -424,17 +449,13 @@
         function createRipple(left) {
             const container = document.getElementById('rainContainer');
             if(!container) return;
-            
             const ripple = document.createElement('div');
             ripple.classList.add('ripple');
             ripple.style.left = left + '%';
             ripple.style.bottom = '15%'; 
-            
             container.appendChild(ripple);
             setTimeout(() => { ripple.remove(); }, 800);
         }
-
-        // Chạy hiệu ứng mưa
         setInterval(createDrop, 400);
     });
 </script>
