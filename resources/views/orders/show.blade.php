@@ -42,15 +42,15 @@
                         {{ $order->status_label }}
                     </span>
 
-                    {{-- NÚT KHIẾU NẠI --}}
-                    @if(method_exists($order, 'canBeReturned') && $order->canBeReturned())
+                    {{-- NÚT KHIẾU NẠI: Tự động ẩn nếu đã gửi hoặc hết hạn --}}
+                    @if($order->canBeReturned())
                         <button type="button" class="btn btn-link text-danger btn-sm fw-bold text-decoration-none ms-lg-auto" data-bs-toggle="modal" data-bs-target="#returnModal">
                             <i class="fas fa-exclamation-triangle me-1"></i> Khiếu nại / Trả hàng
                         </button>
                     @endif
                 </div>
 
-                {{-- HIỂN THỊ THÔNG TIN KHIẾU NẠI (NẾU CÓ) --}}
+                {{-- HIỂN THỊ THÔNG TIN KHIẾU NẠI (NẾU ĐANG TRONG QUÁ TRÌNH KHIẾU NẠI) --}}
                 @if(in_array($order->status, ['returning', 'returned', 'refunding', 'refunded']))
                     <div class="alert alert-secondary border-0 rounded-4 mb-4 shadow-sm">
                         <div class="row g-3">
@@ -58,22 +58,17 @@
                                 <h6 class="fw-bold text-dark mb-2"><i class="fas fa-info-circle me-2"></i>Thông tin khiếu nại</h6>
                                 <p class="mb-2 small">Lý do: <strong class="text-danger">{{ $order->return_reason }}</strong></p>
                                 
-                                @if($order->return_image)
+                                {{-- Xử lý hiển thị mảng ảnh an toàn --}}
+                                @if($order->hasReturnImages())
                                     <div class="mt-2">
                                         <p class="mb-2 small text-muted fw-bold">Ảnh minh chứng:</p>
                                         <div class="d-flex flex-wrap gap-2">
-                                            @php 
-                                                // Xử lý nếu return_image là string (JSON) hoặc array
-                                                $images = is_array($order->return_image) ? $order->return_image : json_decode($order->return_image, true);
-                                            @endphp
-                                            @if($images)
-                                                @foreach($images as $imageUrl)
-                                                    <img src="{{ $imageUrl }}" class="rounded-3 img-evidence" 
-                                                         style="width: 80px; height: 80px; object-fit: cover;"
-                                                         onclick="window.open(this.src)"
-                                                         onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
-                                                @endforeach
-                                            @endif
+                                            @foreach($order->return_image as $imageUrl)
+                                                <img src="{{ $imageUrl }}" class="rounded-3 img-evidence" 
+                                                     style="width: 80px; height: 80px; object-fit: cover;"
+                                                     onclick="window.open(this.src)"
+                                                     onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
+                                            @endforeach
                                         </div>
                                     </div>
                                 @endif
@@ -146,8 +141,9 @@
             <div class="card border-0 shadow-sm rounded-4 p-4 sticky-timeline">
                 <h6 class="fw-bold mb-4"><i class="fas fa-history me-2 text-primary"></i>Lịch sử đơn hàng</h6>
                 <div class="timeline">
-                    @foreach($order->statusHistories->sortByDesc('created_at') as $history)
+                    @foreach($order->statusHistories as $history)
                         <div class="timeline-item pb-4">
+                            {{-- Sử dụng logic màu từ History nếu có, không thì dùng mặc định --}}
                             <div class="timeline-dot bg-{{ $history->to_status_color ?? 'primary' }}"></div>
                             <div class="ms-4">
                                 <div class="fw-bold small text-dark">{{ $history->to_status_label ?? $history->to_status }}</div>
@@ -166,11 +162,10 @@
     </div>
 </div>
 
-{{-- MODAL KHIẾU NẠI (FIXED CHO HTTPS RENDER) --}}
+{{-- MODAL KHIẾU NẠI --}}
 <div class="modal fade" id="returnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
-            {{-- Sử dụng secure_url hoặc route() kết hợp với AppServiceProvider HTTPS --}}
             <form action="{{ route('orders.requestReturn', $order->id) }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 <div class="modal-header border-0">
@@ -191,7 +186,7 @@
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Ảnh minh chứng <span class="text-danger">*</span></label>
                         <input type="file" name="return_images[]" class="form-control rounded-3 shadow-none" accept="image/*" required multiple>
-                        <div class="form-text text-muted" style="font-size: 0.75rem;">Có thể chọn nhiều ảnh cùng lúc.</div>
+                        <div class="form-text text-muted" style="font-size: 0.75rem;">Bạn có thể chọn tối đa 5 ảnh minh chứng.</div>
                     </div>
                     <div class="bg-light p-3 rounded-4 mb-3 border">
                         <p class="small fw-bold mb-2"><i class="fas fa-university me-2"></i>Thông tin nhận hoàn tiền</p>

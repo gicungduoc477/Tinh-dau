@@ -53,7 +53,7 @@ class Order extends Model
         'paid_at' => 'datetime',
         'total_price' => 'double',
         'shipping_fee' => 'double',
-        'return_image' => 'array', // QUAN TRỌNG: Laravel tự động convert JSON từ DB thành mảng PHP
+        'return_image' => 'array', // Laravel tự động convert JSON từ DB thành mảng PHP
     ];
 
     /**
@@ -66,12 +66,20 @@ class Order extends Model
         'shipping'            => 'Đang giao hàng',
         'success'             => 'Giao hàng thành công', 
         'returning'           => 'Đang khiếu nại', 
-        'returning_confirmed' => 'Chờ nhận hàng hoàn', // Đã đồng ý trả hàng
+        'returning_confirmed' => 'Chờ nhận hàng hoàn', 
         'returned'            => 'Đã trả hàng',      
         'refunding'           => 'Đang hoàn tiền',   
         'refunded'            => 'Đã hoàn tiền',     
         'canceled'            => 'Đã hủy',          
     ];
+
+    /**
+     * Chuẩn hóa định dạng ngày tháng khi convert sang mảng/JSON.
+     */
+    protected function serializeDate(\DateTimeInterface $date)
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
 
     // =========================================================================
     // LOGIC NGHIỆP VỤ (BUSINESS LOGIC)
@@ -92,20 +100,23 @@ class Order extends Model
      */
     public function canBeReturned(): bool
     {
-        // Cho phép khiếu nại khi đang giao hoặc đã thành công
+        // 1. Nếu đơn hàng đã/đang trong quy trình khiếu nại thì KHÔNG cho gửi tiếp
+        if (in_array($this->status, ['returning', 'returning_confirmed', 'returned', 'refunding', 'refunded'])) {
+            return false;
+        }
+
+        // 2. Chỉ cho phép khi đang giao hoặc đã thành công
         if (!in_array($this->status, ['success', 'shipping'])) {
             return false;
         }
 
-        // Nếu đã thành công, kiểm tra giới hạn 3 ngày
+        // 3. Nếu đã thành công, kiểm tra giới hạn ngày (Mặc định 3 ngày)
         if ($this->status === 'success') {
-            // Nếu không có ngày cập nhật, lấy ngày tạo làm mốc an toàn
             $baseDate = $this->updated_at ?? $this->created_at;
             $expiryDate = $baseDate->copy()->addDays(self::RETURN_LIMIT_DAYS);
             return Carbon::now()->lessThanOrEqualTo($expiryDate);
         }
 
-        // Luôn cho phép nếu đang trong quá trình vận chuyển (ví dụ: phát hiện giao sai ngay lúc nhận)
         return true;
     }
 
@@ -125,16 +136,18 @@ class Order extends Model
     // =========================================================================
 
     /**
-     * Lấy nhãn trạng thái tiếng Việt.
+     * Luôn đảm bảo return_image trả về mảng (tránh lỗi foreach trên View)
      */
+    public function getReturnImageAttribute($value)
+    {
+        return is_null($value) ? [] : json_decode($value, true);
+    }
+
     public function getStatusLabelAttribute(): string
     {
         return self::$statuses[$this->status] ?? $this->status;
     }
 
-    /**
-     * Lấy màu sắc Bootstrap tương ứng với trạng thái.
-     */
     public function getStatusColorAttribute(): string
     {
         $colors = [
@@ -153,9 +166,6 @@ class Order extends Model
         return $colors[$this->status] ?? 'secondary';
     }
 
-    /**
-     * Tự động xử lý lưu tên chủ tài khoản: Viết hoa, không dấu (nếu cần xử lý thêm).
-     */
     public function setAccountHolderAttribute($value)
     {
         $this->attributes['account_holder'] = mb_strtoupper($value, 'UTF-8');
@@ -168,7 +178,6 @@ class Order extends Model
     {
         if (!$this->account_number || !$this->bank_name) return null;
 
-        // Xóa khoảng trắng trong tên ngân hàng để VietQR nhận diện tốt hơn
         $bank = str_replace(' ', '', $this->bank_name);
         $amount = (int)$this->total_price;
         $info = "Hoan tien don " . $this->order_code;
@@ -176,28 +185,20 @@ class Order extends Model
         return "https://img.vietqr.io/image/{$bank}-{$this->account_number}-compact.jpg?amount={$amount}&addInfo=" . urlencode($info) . "&accountName=" . urlencode($this->account_holder);
     }
 
-    /**
-     * Lấy mã giao dịch từ meta.
-     */
     public function getTransactionIdAttribute(): ?string
     {
         if (empty($this->meta)) return 'N/A';
         return $this->meta['transaction_id'] ?? ($this->meta['payment_id'] ?? 'N/A');
     }
 
-    /**
-     * Lấy tên khách hàng một cách an toàn (tránh lỗi null).
-     */
     public function getSafeCustomerNameAttribute(): string
     {
         return $this->customer_name ?: ($this->user->name ?? 'Khách vãng lai');
     }
 
-    /**
-     * Helper: Kiểm tra xem đơn hàng đã từng được upload ảnh khiếu nại chưa.
-     */
     public function hasReturnImages(): bool
     {
-        return is_array($this->return_image) && count($this->return_image) > 0;
+        $images = $this->return_image;
+        return is_array($images) && count($images) > 0;
     }
 }
