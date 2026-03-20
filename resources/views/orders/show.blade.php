@@ -42,9 +42,10 @@
                         {{ $order->status_label }}
                     </span>
 
+                    {{-- NÚT KHIẾU NẠI --}}
                     @if(method_exists($order, 'canBeReturned') && $order->canBeReturned())
                         <button type="button" class="btn btn-link text-danger btn-sm fw-bold text-decoration-none ms-lg-auto" data-bs-toggle="modal" data-bs-target="#returnModal">
-                            <i class="fas fa-Exclamation-triangle me-1"></i> Khiếu nại / Trả hàng
+                            <i class="fas fa-exclamation-triangle me-1"></i> Khiếu nại / Trả hàng
                         </button>
                     @endif
                 </div>
@@ -57,17 +58,22 @@
                                 <h6 class="fw-bold text-dark mb-2"><i class="fas fa-info-circle me-2"></i>Thông tin khiếu nại</h6>
                                 <p class="mb-2 small">Lý do: <strong class="text-danger">{{ $order->return_reason }}</strong></p>
                                 
-                                {{-- HIỂN THỊ MẢNG ẢNH TỪ CLOUDINARY --}}
-                                @if($order->return_image && is_array($order->return_image))
+                                @if($order->return_image)
                                     <div class="mt-2">
                                         <p class="mb-2 small text-muted fw-bold">Ảnh minh chứng:</p>
                                         <div class="d-flex flex-wrap gap-2">
-                                            @foreach($order->return_image as $imageUrl)
-                                                <img src="{{ $imageUrl }}" class="rounded-3 img-evidence" 
-                                                     style="width: 80px; height: 80px; object-fit: cover;"
-                                                     onclick="window.open(this.src)"
-                                                     onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
-                                            @endforeach
+                                            @php 
+                                                // Xử lý nếu return_image là string (JSON) hoặc array
+                                                $images = is_array($order->return_image) ? $order->return_image : json_decode($order->return_image, true);
+                                            @endphp
+                                            @if($images)
+                                                @foreach($images as $imageUrl)
+                                                    <img src="{{ $imageUrl }}" class="rounded-3 img-evidence" 
+                                                         style="width: 80px; height: 80px; object-fit: cover;"
+                                                         onclick="window.open(this.src)"
+                                                         onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
+                                                @endforeach
+                                            @endif
                                         </div>
                                     </div>
                                 @endif
@@ -103,8 +109,8 @@
                                             @php
                                                 $pImg = asset('backend/img/no-image.png');
                                                 if($it->product && $it->product->image) {
-                                                    $pPath = ltrim($it->product->image, '/');
-                                                    $pImg = str_starts_with($pPath, 'http') ? $pPath : asset('storage/' . $pPath);
+                                                    $pPath = $it->product->image;
+                                                    $pImg = str_starts_with($pPath, 'http') ? $pPath : asset('storage/' . ltrim($pPath, '/'));
                                                 }
                                             @endphp
                                             <img src="{{ $pImg }}" class="rounded-3 me-3 shadow-xs" style="width: 65px; height: 65px; object-fit: cover;" onerror="this.src='{{ asset('backend/img/no-image.png') }}';">
@@ -160,10 +166,11 @@
     </div>
 </div>
 
-{{-- MODAL KHIẾU NẠI --}}
+{{-- MODAL KHIẾU NẠI (FIXED CHO HTTPS RENDER) --}}
 <div class="modal fade" id="returnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
+            {{-- Sử dụng secure_url hoặc route() kết hợp với AppServiceProvider HTTPS --}}
             <form action="{{ route('orders.requestReturn', $order->id) }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 <div class="modal-header border-0">

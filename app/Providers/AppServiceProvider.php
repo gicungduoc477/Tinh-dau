@@ -28,25 +28,25 @@ class AppServiceProvider extends ServiceProvider
         Paginator::useBootstrapFive();
 
         // 2. ÉP DÙNG HTTPS VÀ XỬ LÝ PROXY TRÊN RENDER
-        // Giúp fix lỗi "Not Secure" và mất CSS/JS khi chạy trên server Render
+        // Giải quyết lỗi "Not Secure" khi submit form khiếu nại/trả hàng
         if (config('app.env') !== 'local') {
             URL::forceScheme('https');
             
-            // Ép buộc request nhận diện là HTTPS để các hàm asset() sinh link bảo mật
+            // Ép buộc request nhận diện là HTTPS 'on' (chuẩn server Apache)
             if (isset($this->app['request'])) {
                 $this->app['request']->server->set('HTTPS', 'on');
             }
         }
 
         // 3. CẤU HÌNH CLOUDINARY (TỐI ƯU)
-        // Nếu dùng Cloudinary SDK, nó sẽ tự động nhận diện biến CLOUDINARY_URL từ .env
-        // Việc để trống ở đây giúp tránh lỗi ghi đè mảng config gây ra lỗi "Undefined array key"
+        // Chỉ set key đơn lẻ để tránh lỗi ghi đè mảng gây ra "Undefined array key cloud"
         if (env('CLOUDINARY_URL')) {
-            config(['cloudinary.cloud_url' => env('CLOUDINARY_URL')]);
+            config([
+                'cloudinary.cloud_url' => env('CLOUDINARY_URL')
+            ]);
         }
 
         // 4. ĐĂNG KÝ DRIVER BREVO (MAILER)
-        // Cho phép gửi mail qua API Brevo thay vì SMTP truyền thống
         if (env('BREVO_API_KEY')) {
             Mail::extend('brevo', function (array $config) {
                 return (new BrevoTransportFactory)->create(
