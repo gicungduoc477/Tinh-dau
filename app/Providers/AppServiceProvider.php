@@ -38,7 +38,12 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        // 3. CẤU HÌNH CLOUDINARY (Đã chuyển sang file config/cloudinary.php)
+        // 3. CẤU HÌNH CLOUDINARY (TỐI ƯU)
+        // Nếu dùng Cloudinary SDK, nó sẽ tự động nhận diện biến CLOUDINARY_URL từ .env
+        // Việc để trống ở đây giúp tránh lỗi ghi đè mảng config gây ra lỗi "Undefined array key"
+        if (env('CLOUDINARY_URL')) {
+            config(['cloudinary.cloud_url' => env('CLOUDINARY_URL')]);
+        }
 
         // 4. ĐĂNG KÝ DRIVER BREVO (MAILER)
         // Cho phép gửi mail qua API Brevo thay vì SMTP truyền thống
