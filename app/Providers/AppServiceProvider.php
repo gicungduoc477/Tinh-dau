@@ -38,12 +38,18 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        // 3. CẤU HÌNH CLOUDINARY (TỐI ƯU)
-        // Chỉ set key đơn lẻ để tránh lỗi ghi đè mảng gây ra "Undefined array key cloud"
-        if (env('CLOUDINARY_URL')) {
-            config([
-                'cloudinary.cloud_url' => env('CLOUDINARY_URL')
-            ]);
+        // 3. CẤU HÌNH CLOUDINARY TỪ CLOUDINARY_URL
+        // Giải pháp triệt để cho lỗi "Undefined array key 'cloud'" và cảnh báo bảo mật
+        if ($cloudinaryUrl = env('CLOUDINARY_URL')) {
+            $config = parse_url($cloudinaryUrl);
+            if ($config && isset($config['host'], $config['user'], $config['pass'])) {
+                config([
+                    'cloudinary.cloud.cloud_name' => $config['host'],
+                    'cloudinary.cloud.api_key'    => $config['user'],
+                    'cloudinary.cloud.api_secret' => $config['pass'],
+                    'cloudinary.cloud_url'        => $cloudinaryUrl, // Giữ lại cloud_url để tương thích
+                ]);
+            }
         }
 
         // 4. ĐĂNG KÝ DRIVER BREVO (MAILER)
