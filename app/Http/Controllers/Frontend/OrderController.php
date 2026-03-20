@@ -9,14 +9,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
-// Sử dụng Facade Cloudinary
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class OrderController extends Controller
 {
     public function __construct()
     {
-        // Chỉ yêu cầu đăng nhập với các hàm trừ 'show'
         $this->middleware('auth')->except(['show']);
     }
 
@@ -56,7 +54,6 @@ class OrderController extends Controller
         $canReturn = false;
         $remainingTime = null;
 
-        // Kiểm tra thời gian khiếu nại (Mặc định 7 ngày nếu không định nghĩa)
         if (method_exists($order, 'canBeReturned') && $order->canBeReturned()) {
             $canReturn = true;
             $limitDays = defined('App\Models\Order::RETURN_LIMIT_DAYS') ? Order::RETURN_LIMIT_DAYS : 7;
@@ -73,6 +70,7 @@ class OrderController extends Controller
      */
     public function requestReturn(Request $request, $id)
     {
+        // 1. Tìm đơn hàng hợp lệ
         $order = Order::where('user_id', Auth::id())
             ->whereIn('status', ['success', 'shipping', 'delivered']) 
             ->findOrFail($id);
@@ -81,10 +79,11 @@ class OrderController extends Controller
             return back()->with('error', 'Đã hết thời hạn khiếu nại hoặc trạng thái đơn hàng không cho phép.');
         }
 
+        // 2. Validate dữ liệu đầu vào
         $request->validate([
             'return_reason'   => 'required|string|max:255',
-            'return_images'    => 'required|array|min:1|max:5', // Giới hạn tối đa 5 ảnh
-            'return_images.*'  => 'image|mimes:jpeg,png,jpg|max:5120',
+            'return_images'    => 'required|array|min:1|max:5',
+            'return_images.*'  => 'image|mimes:jpeg,png,jpg,webp|max:5120', // Hỗ trợ thêm WebP
             'bank_name'       => 'required|string|max:100',
             'account_number'  => 'required|string|max:30',
             'account_holder'  => 'required|string|max:100',
@@ -98,15 +97,11 @@ class OrderController extends Controller
 
             $imagePaths = [];
             
-            // Kiểm tra cấu hình Cloudinary trước khi upload để tránh lỗi
-            if (!config('cloudinary.cloud_url')) {
-                throw new \Exception("Hệ thống chưa cấu hình Cloudinary Cloud URL. Vui lòng kiểm tra lại file .env và chạy 'php artisan config:cache'.");
-            }
-
+            // 3. Xử lý upload ảnh lên Cloudinary
             if ($request->hasFile('return_images')) {
                 foreach ($request->file('return_images') as $file) {
                     if ($file->isValid()) {
-                        // Upload lên Cloudinary với folder 'returns'
+                        // Tối ưu ảnh khi upload để tiết kiệm dung lượng Cloudinary
                         $result = Cloudinary::upload($file->getRealPath(), [
                             'folder' => 'returns',
                             'transformation' => [
@@ -115,9 +110,14 @@ class OrderController extends Controller
                             ]
                         ]);
 
-                        // Lấy URL từ kết quả trả về
-                        $url = is_object($result) ? $result->getSecurePath() : ($result['secure_url'] ?? null);
-                        
+                        // Cách lấy URL an toàn, tránh lỗi "Undefined array key"
+                        $url = null;
+                        if (is_object($result)) {
+                            $url = $result->getSecurePath();
+                        } elseif (is_array($result) && isset($result['secure_url'])) {
+                            $url = $result['secure_url'];
+                        }
+
                         if ($url) {
                             $imagePaths[] = $url;
                         }
@@ -125,25 +125,24 @@ class OrderController extends Controller
                 }
             }
 
+            // Kiểm tra nếu upload thất bại hoàn toàn
             if (empty($imagePaths)) {
-                throw new \Exception("Không thể tải ảnh bằng chứng lên máy chủ. Vui lòng thử lại.");
+                throw new \Exception("Hệ thống không nhận được ảnh minh chứng. Vui lòng kiểm tra lại file ảnh hoặc kết nối mạng.");
             }
 
-            // Lưu trạng thái cũ trước khi update
+            // 4. Cập nhật thông tin đơn hàng và lưu lịch sử
             $oldStatus = $order->status;
 
-            // Cập nhật thông tin đơn hàng
             $order->update([
                 'status'         => 'returning',
                 'return_reason'  => $request->return_reason,
-                'return_image'   => $imagePaths, 
+                'return_image'   => $imagePaths, // Cast sang JSON tự động nếu Model đã khai báo
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,
                 'account_holder' => $request->account_holder,
             ]);
 
-            // Ghi log lịch sử trạng thái
             OrderStatusHistory::create([
                 'order_id'    => $order->id,
                 'from_status' => $oldStatus,
@@ -157,8 +156,11 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Lỗi khiếu nại đơn hàng #{$id}: " . $e->getMessage());
-            return back()->withInput()->with('error', 'Lỗi: ' . $e->getMessage());
+            // Log chi tiết lỗi để bạn có thể xem trong tab Logs trên Render
+            Log::error("LỖI KHIẾU NẠI ĐƠN HÀNG #{$id}: " . $e->getMessage());
+            Log::error($e->getTraceAsString());
+
+            return back()->withInput()->with('error', 'Lỗi hệ thống: ' . $e->getMessage());
         }
     }
 
@@ -177,7 +179,6 @@ class OrderController extends Controller
             $oldStatus = $order->status;
             $order->update(['status' => 'canceled']);
 
-            // Hoàn lại tồn kho
             foreach ($order->items as $item) {
                 if ($item->product) {
                     $item->product->increment('stock', $item->quantity);
