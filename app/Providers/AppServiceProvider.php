@@ -43,12 +43,15 @@ class AppServiceProvider extends ServiceProvider
         if ($cloudinaryUrl = env('CLOUDINARY_URL')) {
             $config = parse_url($cloudinaryUrl);
             if ($config && isset($config['host'], $config['user'], $config['pass'])) {
-                config([
-                    'cloudinary.cloud.cloud_name' => $config['host'],
-                    'cloudinary.cloud.api_key'    => $config['user'],
-                    'cloudinary.cloud.api_secret' => $config['pass'],
-                    'cloudinary.cloud_url'        => $cloudinaryUrl, // Giữ lại cloud_url để tương thích
-                ]);
+                // Lấy cấu hình hiện tại và ghi đè
+                $cloudinaryConfig = config('cloudinary', []);
+                $cloudinaryConfig['cloud']['cloud_name'] = $config['host'];
+                $cloudinaryConfig['cloud']['api_key']    = $config['user'];
+                $cloudinaryConfig['cloud']['api_secret'] = $config['pass'];
+                $cloudinaryConfig['cloud_url']           = $cloudinaryUrl;
+                
+                // Set lại toàn bộ config cho cloudinary
+                config(['cloudinary' => $cloudinaryConfig]);
             }
         }
 
