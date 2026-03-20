@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    /**
+     * Cloudinary Configuration
+     * Được sử dụng để upload ảnh khiếu nại/trả hàng lên Cloud
+     */
+    'cloudinary' => [
+        'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+        'api_key'    => env('CLOUDINARY_API_KEY'),
+        'api_secret' => env('CLOUDINARY_API_SECRET'),
+        'url'        => env('CLOUDINARY_URL'), // Thêm URL để dự phòng cho một số thư viện cũ
+    ],
+
 ];
