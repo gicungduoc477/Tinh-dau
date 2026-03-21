@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 
-// Import SDK Cloudinary gốc để né lỗi mảng "cloud"
+// SỬ DỤNG SDK GỐC ĐỂ TRÁNH LỖI CONFIG TRÊN RENDER
 use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
 
@@ -69,10 +69,11 @@ class OrderController extends Controller
     }
 
     /**
-     * Gửi yêu cầu Khiếu nại (Sửa lỗi Cloudinary Config ở đây)
+     * Gửi yêu cầu Khiếu nại (Sửa lỗi Cloudinary và Logic)
      */
     public function requestReturn(Request $request, $id)
     {
+        // 1. Tìm đơn hàng
         $order = Order::where('user_id', Auth::id())
             ->whereIn('status', ['success', 'shipping', 'delivered', 'completed']) 
             ->findOrFail($id);
@@ -81,6 +82,7 @@ class OrderController extends Controller
             return back()->with('error', 'Đã hết thời hạn khiếu nại hoặc trạng thái đơn hàng không cho phép.');
         }
 
+        // 2. Validate
         $request->validate([
             'return_reason'   => 'required|string|max:255',
             'return_images'    => 'required|array|min:1|max:5',
@@ -95,10 +97,10 @@ class OrderController extends Controller
 
             $imagePaths = [];
             
-            // --- CẤU HÌNH CLOUDINARY TRỰC TIẾP ---
+            // --- Cấu hình Cloudinary bằng URL từ .env ---
             $cloudinaryUrl = env('CLOUDINARY_URL');
             if (!$cloudinaryUrl) {
-                throw new \Exception('Thiếu cấu hình CLOUDINARY_URL trong môi trường.');
+                throw new \Exception('Chưa cấu hình CLOUDINARY_URL trong Environment của Render.');
             }
             Configuration::instance($cloudinaryUrl);
             $uploadApi = new UploadApi();
@@ -106,10 +108,8 @@ class OrderController extends Controller
             if ($request->hasFile('return_images')) {
                 foreach ($request->file('return_images') as $file) {
                     if ($file->isValid()) {
-                        // Upload bằng SDK thay vì Facade để tránh lỗi "Undefined array key cloud"
                         $uploadResult = $uploadApi->upload($file->getRealPath(), [
-                            'folder' => 'nature_shop_returns',
-                            'resource_type' => 'image',
+                            'folder' => 'returns',
                             'transformation' => [
                                 'quality' => 'auto',
                                 'fetch_format' => 'auto'
@@ -124,15 +124,15 @@ class OrderController extends Controller
             }
 
             if (empty($imagePaths)) {
-                throw new \Exception("Không thể tải ảnh bằng chứng lên Cloudinary.");
+                throw new \Exception("Hệ thống không nhận được ảnh minh chứng. Vui lòng thử lại.");
             }
 
+            // 3. Cập nhật dữ liệu
             $oldStatus = $order->status;
-
             $order->update([
                 'status'         => 'returning',
                 'return_reason'  => $request->return_reason,
-                'return_image'   => $imagePaths, 
+                'return_image'   => $imagePaths, // Đảm bảo Model đã có protected $casts = ['return_image' => 'array']
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,
@@ -152,8 +152,8 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("LỖI KHIẾU NẠI ĐƠN HÀNG #{$id}: " . $e->getMessage());
-            return back()->withInput()->with('error', 'Lỗi: ' . $e->getMessage());
+            Log::error("LỖI KHIẾU NẠI ĐƠN #{$id}: " . $e->getMessage());
+            return back()->withInput()->with('error', 'Lỗi hệ thống: ' . $e->getMessage());
         }
     }
 
