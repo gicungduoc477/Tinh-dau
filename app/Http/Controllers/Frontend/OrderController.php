@@ -9,7 +9,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+
+// Import SDK Cloudinary gốc để né lỗi mảng "cloud"
+use Cloudinary\Configuration\Configuration;
+use Cloudinary\Api\Upload\UploadApi;
 
 class OrderController extends Controller
 {
@@ -19,7 +22,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Danh sách đơn hàng của tôi
+     * Danh sách đơn hàng
      */
     public function index()
     {
@@ -66,30 +69,25 @@ class OrderController extends Controller
     }
 
     /**
-     * Gửi yêu cầu Khiếu nại (Hoàn tiền/Trả hàng)
+     * Gửi yêu cầu Khiếu nại (Sửa lỗi Cloudinary Config ở đây)
      */
     public function requestReturn(Request $request, $id)
     {
-        // 1. Tìm đơn hàng hợp lệ
         $order = Order::where('user_id', Auth::id())
-            ->whereIn('status', ['success', 'shipping', 'delivered']) 
+            ->whereIn('status', ['success', 'shipping', 'delivered', 'completed']) 
             ->findOrFail($id);
 
         if (!$order->canBeReturned()) {
             return back()->with('error', 'Đã hết thời hạn khiếu nại hoặc trạng thái đơn hàng không cho phép.');
         }
 
-        // 2. Validate dữ liệu đầu vào
         $request->validate([
             'return_reason'   => 'required|string|max:255',
             'return_images'    => 'required|array|min:1|max:5',
-            'return_images.*'  => 'image|mimes:jpeg,png,jpg,webp|max:5120', // Hỗ trợ thêm WebP
+            'return_images.*'  => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'bank_name'       => 'required|string|max:100',
             'account_number'  => 'required|string|max:30',
             'account_holder'  => 'required|string|max:100',
-        ], [
-            'return_images.required' => 'Vui lòng tải lên ít nhất 1 ảnh bằng chứng.',
-            'return_images.max' => 'Bạn chỉ được tải lên tối đa 5 ảnh.'
         ]);
 
         try {
@@ -97,46 +95,44 @@ class OrderController extends Controller
 
             $imagePaths = [];
             
-            // 3. Xử lý upload ảnh lên Cloudinary
+            // --- CẤU HÌNH CLOUDINARY TRỰC TIẾP ---
+            $cloudinaryUrl = env('CLOUDINARY_URL');
+            if (!$cloudinaryUrl) {
+                throw new \Exception('Thiếu cấu hình CLOUDINARY_URL trong môi trường.');
+            }
+            Configuration::instance($cloudinaryUrl);
+            $uploadApi = new UploadApi();
+
             if ($request->hasFile('return_images')) {
                 foreach ($request->file('return_images') as $file) {
                     if ($file->isValid()) {
-                        // Tối ưu ảnh khi upload để tiết kiệm dung lượng Cloudinary
-                        $result = Cloudinary::upload($file->getRealPath(), [
-                            'folder' => 'returns',
+                        // Upload bằng SDK thay vì Facade để tránh lỗi "Undefined array key cloud"
+                        $uploadResult = $uploadApi->upload($file->getRealPath(), [
+                            'folder' => 'nature_shop_returns',
+                            'resource_type' => 'image',
                             'transformation' => [
                                 'quality' => 'auto',
                                 'fetch_format' => 'auto'
                             ]
                         ]);
 
-                        // Cách lấy URL an toàn, tránh lỗi "Undefined array key"
-                        $url = null;
-                        if (is_object($result)) {
-                            $url = $result->getSecurePath();
-                        } elseif (is_array($result) && isset($result['secure_url'])) {
-                            $url = $result['secure_url'];
-                        }
-
-                        if ($url) {
-                            $imagePaths[] = $url;
+                        if (isset($uploadResult['secure_url'])) {
+                            $imagePaths[] = $uploadResult['secure_url'];
                         }
                     }
                 }
             }
 
-            // Kiểm tra nếu upload thất bại hoàn toàn
             if (empty($imagePaths)) {
-                throw new \Exception("Hệ thống không nhận được ảnh minh chứng. Vui lòng kiểm tra lại file ảnh hoặc kết nối mạng.");
+                throw new \Exception("Không thể tải ảnh bằng chứng lên Cloudinary.");
             }
 
-            // 4. Cập nhật thông tin đơn hàng và lưu lịch sử
             $oldStatus = $order->status;
 
             $order->update([
                 'status'         => 'returning',
                 'return_reason'  => $request->return_reason,
-                'return_image'   => $imagePaths, // Cast sang JSON tự động nếu Model đã khai báo
+                'return_image'   => $imagePaths, 
                 'return_note'    => $request->return_note,
                 'bank_name'      => $request->bank_name,
                 'account_number' => $request->account_number,
@@ -156,11 +152,8 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Log chi tiết lỗi để bạn có thể xem trong tab Logs trên Render
             Log::error("LỖI KHIẾU NẠI ĐƠN HÀNG #{$id}: " . $e->getMessage());
-            Log::error($e->getTraceAsString());
-
-            return back()->withInput()->with('error', 'Lỗi hệ thống: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -170,7 +163,7 @@ class OrderController extends Controller
     public function cancel(Request $request, $id)
     {
         $order = Order::where('user_id', Auth::id())
-            ->whereIn('status', ['pending', 'paid'])
+            ->whereIn('status', ['pending', 'paid', 'processing'])
             ->findOrFail($id);
 
         try {
